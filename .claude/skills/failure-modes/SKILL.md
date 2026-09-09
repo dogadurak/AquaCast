@@ -279,6 +279,28 @@ Make silent corruption impossible. Accept rework.
   equals the expected number of observations for **every row**, not once per month.
   The collection-level check stays too — they catch different failures.
 
+## 19. A check applied to the wrong population, or to an incommensurable quantity
+**Class:** rework — a false alarm, which is expensive in a different way
+
+- **SYMPTOM:** An assertion fails on correct data and halts a long job. Here: "monthly
+  precipitation must not exceed 417 mm" stopped the export on 1981 at a value of
+  720.6 mm that was entirely real.
+- **MECHANISM:** Two errors compounded. The bound compared a **per-cell monthly**
+  value against a **basin-mean annual** figure — incommensurable quantities, so the
+  comparison was meaningless whatever number was chosen. And it was applied to the
+  whole exported set including the **ring cells**, which exist only as boundary
+  insurance and sit partly on the Taurus flank where 1,500–2,000 mm/year is normal.
+  The offending cell was outside the basin and would have been masked out anyway.
+- **DEFENCE:** Before writing a bound, state the population it describes and check
+  the units match on both sides. Apply analysis-time sanity checks to the analysis
+  population, not to cells deliberately carried for other reasons. And prefer a
+  **cross-check between two independent computation routes** over an absolute bound:
+  here, the exported per-cell values averaged over the basin reproduce the
+  pre-flight's server-side basin reduction to within 0.07%, which catches an
+  accumulation-window bug that no single-value ceiling would.
+- False alarms are not free. They cost a 2.5-hour job and, worse, they train the
+  habit of relaxing thresholds until nothing fires.
+
 ---
 
 ## Adding an entry

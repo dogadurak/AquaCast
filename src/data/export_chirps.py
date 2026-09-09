@@ -37,11 +37,26 @@ from src.data.gee_io import (
 from src.data.grid import GRID_CSV, basin_feature, cell_indices, chirps_projection, lattice_params, make_cell_id
 
 RAW_DIR = ROOT / "data" / "raw" / "chirps"
+CONTINUITY_JSON = ROOT / "reports" / "chirps_continuity.json"
 PENTADS_PER_MONTH = 6
-# Konya basin-mean annual total is 417 mm (ministry). A single month above this
-# would be the wettest month ever recorded here by a wide margin; the check exists
-# to catch a unit or accumulation error, not to bound weather.
-MAX_PLAUSIBLE_MONTHLY_MM = 417.0
+
+# A catastrophic-scale ceiling only. It is deliberately far above anything weather
+# produces here, because it guards against a scale or accumulation blunder - summing
+# a year instead of a month, say - and nothing subtler. Subtler errors are caught by
+# the basin-mean cross-check below, which is anchored to an independent computation.
+#
+# An earlier version used 417 mm, the basin-MEAN ANNUAL total, as a bound on a
+# per-CELL MONTHLY value. That is a category error twice over: a single cell is not
+# bounded by a basin mean, and an annual total is not a monthly one. It fired on
+# 1981 against a genuinely correct 720.6 mm - in a RING cell on the Taurus flank,
+# outside the basin, where 1,500-2,000 mm/year is normal. See failure-modes 15.
+ABSURD_MONTHLY_MM = 2000.0
+
+# The exported per-cell values, averaged over the basin, must reproduce the
+# basin-mean series that the pre-flight computed by a completely different route
+# (server-side reduceRegion over the polygon). Agreement is evidence the sampling
+# and the accumulation window are both right.
+BASIN_MEAN_TOLERANCE = 0.02
 
 
 def month_image(chirps: "ee.ImageCollection", start: "ee.Date") -> tuple["ee.Image", "ee.Number"]:
@@ -121,6 +136,8 @@ def export_year(
     params: dict[str, float],
     year: int,
     grid_ids: set[int],
+    basin_ids: set[int],
+    reference_annual: dict[int, float],
 ) -> dict[str, Any]:
     path = RAW_DIR / f"chirps_{year}.csv"
     manifest_path = RAW_DIR / f"chirps_{year}.manifest.json"
@@ -154,11 +171,32 @@ def export_year(
     if negatives:
         problems.append(f"negative precipitation values: {negatives}")
     hottest = float(df["precip_chirps_mm"].max())
-    if hottest > MAX_PLAUSIBLE_MONTHLY_MM:
+    if hottest > ABSURD_MONTHLY_MM:
         problems.append(
-            f"monthly maximum {hottest:.1f} mm exceeds the basin's whole-year mean "
-            f"({MAX_PLAUSIBLE_MONTHLY_MM:.0f} mm) - suspect a unit or accumulation error"
+            f"monthly maximum {hottest:.1f} mm is beyond anything weather produces - "
+            "suspect a scale or accumulation blunder"
         )
+
+    # The real guard. Range checks are applied to the ANALYSIS population only:
+    # ring cells exist as boundary insurance and sit partly on the Taurus flank,
+    # a different precipitation regime entirely, so their values say nothing about
+    # whether the basin export is correct.
+    basin = df[df["cell_id"].isin(basin_ids)]
+    basin_mean_annual = float(basin.groupby("cell_id")["precip_chirps_mm"].sum().mean())
+    expected_mean = reference_annual.get(year)
+    if expected_mean is None:
+        problems.append(
+            f"no pre-flight basin mean for {year} - run scripts.check_chirps_continuity first"
+        )
+    else:
+        drift = abs(basin_mean_annual / expected_mean - 1)
+        if drift > BASIN_MEAN_TOLERANCE:
+            problems.append(
+                f"basin-mean annual total {basin_mean_annual:.1f} mm differs from the "
+                f"pre-flight value {expected_mean:.1f} mm by {drift:.2%}, over the "
+                f"{BASIN_MEAN_TOLERANCE:.0%} tolerance. The per-cell sampling and the "
+                "server-side basin reduction disagree, so one of them is wrong"
+            )
     # Exact zeros: genuine dry month, or masked pixels arriving as 0?
     #
     # Seasonality does not separate them. CHIRPS overestimates low precipitation
@@ -214,6 +252,8 @@ def export_year(
             "zero_month_diagnostics": zero_diag,
         },
         "n_obs_per_pixel": PENTADS_PER_MONTH,
+        "basin_mean_annual_mm": basin_mean_annual,
+        "preflight_basin_mean_annual_mm": expected_mean,
         "note": (
             "CHIRPS final products are reprocessed from time to time, so the same "
             "export can return different numbers later. fetched_utc is what makes "
@@ -221,8 +261,9 @@ def export_year(
         ),
     }
     manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
-    print(f"  {year}: {len(df):,} rows, "
-          f"mean {manifest['precip_mm']['mean']:.1f} mm, "
+    print(f"  {year}: {len(df):,} rows, basin-mean annual "
+          f"{basin_mean_annual:.1f} mm vs pre-flight {expected_mean:.1f} "
+          f"({basin_mean_annual / expected_mean - 1:+.2%}), "
           f"max {hottest:.1f} mm, zeros {manifest['precip_mm']['zero_rows']:,}")
     return manifest
 
@@ -248,8 +289,20 @@ def main() -> None:
 
     grid = pd.read_csv(GRID_CSV)
     grid_ids = set(grid["cell_id"].astype("int64"))
-    print(f"Grid: {len(grid_ids):,} cells; exporting {len(years)} years "
-          f"({years[0]}-{years[-1]})")
+    basin_ids = set(grid.loc[grid["in_hydrobasins"], "cell_id"].astype("int64"))
+
+    if not CONTINUITY_JSON.exists():
+        raise SystemExit(
+            "reports/chirps_continuity.json is missing. Run "
+            "`python -m scripts.check_chirps_continuity` first: the export checks "
+            "itself against the basin-mean series that pre-flight computes."
+        )
+    reference_annual = {
+        int(k): float(v)
+        for k, v in json.loads(CONTINUITY_JSON.read_text(encoding="utf-8"))["annual_mm"].items()
+    }
+    print(f"Grid: {len(grid_ids):,} cells ({len(basin_ids):,} in basin); "
+          f"exporting {len(years)} years ({years[0]}-{years[-1]})")
 
     proj = chirps_projection(config)
     params = lattice_params(with_retry(lambda: proj.getInfo(), what="projection"))
@@ -264,7 +317,8 @@ def main() -> None:
     manifests = []
     for year in years:
         manifests.append(
-            export_year(config, chirps, region, proj, params, year, grid_ids)
+            export_year(config, chirps, region, proj, params, year,
+                        grid_ids, basin_ids, reference_annual)
         )
 
     print("\nAssertions (expected -> actual):")

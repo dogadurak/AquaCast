@@ -31,7 +31,7 @@ import sys
 import tempfile
 import traceback
 from dataclasses import dataclass, field, asdict
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 # --------------------------------------------------------------------------
 # CONFIG - Konya Closed Basin (bounding box; the real basin polygon is
@@ -40,6 +40,11 @@ from datetime import datetime, timezone
 AOI_BBOX = [31.4, 36.7, 35.2, 39.4]  # [west, south, east, north] in EPSG:4326
 TRAIN_START = "2001-01-01"
 TRAIN_END = "2025-12-31"
+
+# Satellite products lag reality by weeks to months. A record that ends within this
+# many months of TRAIN_END is current; anything older is a coverage gap worth
+# reporting rather than a normal publication delay.
+COVERAGE_TOLERANCE_MONTHS = 3
 
 # Candidate Earth Engine asset IDs per variable. The script tries them in
 # order and reports the first that resolves, plus its real date range.
@@ -110,10 +115,15 @@ GEE_CANDIDATES: dict[str, dict] = {
     },
     "terrestrial_water_storage": {
         "role": "OPTIONAL - basin-scale groundwater signal (~300 km, NOT a map layer)",
+        # MASCON_CRI first: it is the only candidate that carries GRACE-FO and so
+        # reaches 2024-09. The *_V04/LAND and *_V03/LAND products stop at 2017-05,
+        # which does not cover the test period (2022-2025) and would make GRACE
+        # useless as a covariate without that being obvious from an [ OK ] line.
         "ids": [
+            "NASA/GRACE/MASS_GRIDS_V04/MASCON_CRI",
+            "NASA/GRACE/MASS_GRIDS_V04/MASCON",
             "NASA/GRACE/MASS_GRIDS_V04/LAND",
             "NASA/GRACE/MASS_GRIDS_V03/LAND",
-            "NASA/GRACE/MASS_GRIDS/LAND",
         ],
         "type": "ImageCollection",
     },
@@ -125,6 +135,11 @@ GEE_CANDIDATES: dict[str, dict] = {
             "COPERNICUS/Landcover/100m/Proba-V-C3/Global",
         ],
         "type": "ImageCollection",
+        # Single-epoch product (2021) applied as a static mask by design, so a
+        # coverage check against the study period would be a false alarm. The
+        # assumption that cropland extent is stable over 2001-2025 is a real
+        # limitation, but it belongs in the data dictionary, not here.
+        "expect_full_coverage": False,
     },
     "basin_boundary": {
         "role": "AOI - fallback basin polygon if no official DSI boundary is available",
@@ -223,26 +238,38 @@ def check_earth_engine(project: str | None) -> None:
         errors = []
         for asset_id in cfg["ids"]:
             try:
-                info = probe_gee_asset(ee, asset_id, cfg["type"], aoi)
-                resolved = (asset_id, info)
+                info, meta = probe_gee_asset(ee, asset_id, cfg["type"], aoi)
+                resolved = (asset_id, info, meta)
                 break
             except Exception as exc:
-                errors.append(f"{asset_id}: {type(exc).__name__}")
+                # Keep the message, not just the class name. A bare "OSError" hid a
+                # bug in this script behind what looked like a missing CORE dataset.
+                errors.append(f"{asset_id}: {type(exc).__name__}: {str(exc)[:200]}")
         if resolved:
-            asset_id, info = resolved
+            asset_id, info, meta = resolved
             status = "OK"
             detail = f"{asset_id} | {info}"
             if cfg["role"].startswith("CORE") and "n=0" in info:
                 status = "FAIL"
                 detail += " | CORE dataset returned no images over AOI"
-            record(f"GEE {var} ({cfg['role'].split(' - ')[0]})", status, detail, asset=asset_id)
+            # A dataset that resolves but stops before the study period ends is a
+            # silent trap: it reads as OK while being unusable over the test years.
+            # GRACE V04/LAND is the live example - it ends 2017-05.
+            shortfall = coverage_shortfall(meta) if cfg.get("expect_full_coverage", True) else None
+            if shortfall and status == "OK":
+                status = "FAIL" if cfg["role"].startswith("CORE") else "WARN"
+                detail += f" | {shortfall}"
+            record(
+                f"GEE {var} ({cfg['role'].split(' - ')[0]})", status, detail,
+                asset=asset_id, coverage_end=meta.get("last"),
+            )
         else:
             status = "FAIL" if cfg["role"].startswith("CORE") else "WARN"
             record(f"GEE {var}", status, "no candidate resolved -> " + "; ".join(errors))
 
 
-def probe_gee_asset(ee, asset_id: str, kind: str, aoi) -> str:
-    """Return a short human-readable availability string, or raise."""
+def probe_gee_asset(ee, asset_id: str, kind: str, aoi) -> tuple[str, dict]:
+    """Return (human-readable availability string, machine-readable meta), or raise."""
     if kind == "ImageCollection":
         col = ee.ImageCollection(asset_id).filterBounds(aoi)
         full = ee.ImageCollection(asset_id)
@@ -255,25 +282,60 @@ def probe_gee_asset(ee, asset_id: str, kind: str, aoi) -> str:
         bands = ee.Image(full.first()).bandNames().getInfo()
         first = fmt_ms(rng.get("min"))
         last = fmt_ms(rng.get("max"))
-        return (
+        detail = (
             f"coverage {first} -> {last} | n={n} in training window | "
             f"bands={len(bands)} e.g. {bands[:4]}"
         )
+        return detail, {"first": first, "last": last, "n_in_window": n, "temporal": True}
     if kind == "Image":
         img = ee.Image(asset_id)
         bands = img.bandNames().getInfo()
-        return f"static image | bands={bands[:4]}"
+        return f"static image | bands={bands[:4]}", {"temporal": False}
     if kind == "FeatureCollection":
         fc = ee.FeatureCollection(asset_id).filterBounds(aoi)
         n = fc.size().getInfo()
-        return f"features intersecting AOI n={n}"
+        return f"features intersecting AOI n={n}", {"temporal": False}
     raise ValueError(f"unknown kind {kind}")
 
 
+def coverage_shortfall(meta: dict) -> str | None:
+    """Describe how far a collection falls short of the study period, if it does.
+
+    A dataset can resolve, return images, and still be unusable because its record
+    stops years before the test period. That reads as [ OK ] unless it is checked
+    explicitly.
+    """
+    if not meta.get("temporal") or not meta.get("last"):
+        return None
+    try:
+        last = datetime.strptime(meta["last"], "%Y-%m").replace(tzinfo=timezone.utc)
+    except ValueError:
+        return None
+    required_end = datetime.fromisoformat(TRAIN_END).replace(tzinfo=timezone.utc)
+    months_short = (required_end.year - last.year) * 12 + (required_end.month - last.month)
+    if months_short <= COVERAGE_TOLERANCE_MONTHS:
+        return None
+    return (
+        f"record ends {meta['last']}, {months_short} months before the study period "
+        f"ends ({TRAIN_END[:7]}) - unusable over the later split(s)"
+    )
+
+
+EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
+
+
 def fmt_ms(ms) -> str:
-    if not ms:
+    """Format an epoch-millisecond value as YYYY-MM.
+
+    Must not use datetime.fromtimestamp / utcfromtimestamp: both delegate to the
+    platform's gmtime, and on Windows a negative timestamp raises
+    OSError [Errno 22]. ERA5-Land starts in 1950, so its system:time_start is
+    negative and the probe reported a working CORE dataset as unresolvable.
+    Arithmetic on the epoch is platform-independent and handles pre-1970 dates.
+    """
+    if ms is None:
         return "?"
-    return datetime.fromtimestamp(ms / 1000, tz=timezone.utc).strftime("%Y-%m")
+    return (EPOCH + timedelta(milliseconds=ms)).strftime("%Y-%m")
 
 
 # --------------------------------------------------------------------------

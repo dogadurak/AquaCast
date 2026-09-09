@@ -7,9 +7,108 @@
   },
   {
     "name": "GEE auth",
-    "status": "FAIL",
-    "detail": "EEException: Please authorize access to your Earth Engine account by running\n\nearthengine authenticate\n\nin your command line, or ee.Authenticate() in Python, and then retry.. Run 'earthengine authenticate' and register a Cloud project for noncommercial use.",
+    "status": "OK",
+    "detail": "initialized (project=mythic-brook-481108-h7)",
     "extra": {}
+  },
+  {
+    "name": "GEE precipitation (CORE)",
+    "status": "OK",
+    "detail": "UCSB-CHC/CHIRPS/V3/PENTAD | coverage 1981-01 -> 2026-07 | n=1800 in training window | bands=1 e.g. ['precipitation']",
+    "extra": {
+      "asset": "UCSB-CHC/CHIRPS/V3/PENTAD",
+      "coverage_end": "2026-07"
+    }
+  },
+  {
+    "name": "GEE meteo_reanalysis (CORE)",
+    "status": "OK",
+    "detail": "ECMWF/ERA5_LAND/MONTHLY_AGGR | coverage 1950-02 -> 2026-08 | n=300 in training window | bands=150 e.g. ['dewpoint_temperature_2m', 'temperature_2m', 'skin_temperature', 'soil_temperature_level_1']",
+    "extra": {
+      "asset": "ECMWF/ERA5_LAND/MONTHLY_AGGR",
+      "coverage_end": "2026-08"
+    }
+  },
+  {
+    "name": "GEE ndvi (CORE)",
+    "status": "OK",
+    "detail": "MODIS/061/MOD13A2 | coverage 2000-02 -> 2026-08 | n=575 in training window | bands=12 e.g. ['NDVI', 'EVI', 'DetailedQA', 'sur_refl_b01']",
+    "extra": {
+      "asset": "MODIS/061/MOD13A2",
+      "coverage_end": "2026-08"
+    }
+  },
+  {
+    "name": "GEE ndvi_successor (CONTINUITY)",
+    "status": "OK",
+    "detail": "NASA/VIIRS/002/VNP13A1 | coverage 2012-01 -> 2026-08 | n=641 in training window | bands=16 e.g. ['EVI', 'EVI2', 'NDVI', 'NIR_reflectance']",
+    "extra": {
+      "asset": "NASA/VIIRS/002/VNP13A1",
+      "coverage_end": "2026-08"
+    }
+  },
+  {
+    "name": "GEE evapotranspiration (SUPPORTING)",
+    "status": "OK",
+    "detail": "MODIS/061/MOD16A2GF | coverage 2000-01 -> 2025-12 | n=1150 in training window | bands=5 e.g. ['ET', 'LE', 'PET', 'PLE']",
+    "extra": {
+      "asset": "MODIS/061/MOD16A2GF",
+      "coverage_end": "2025-12"
+    }
+  },
+  {
+    "name": "GEE land_surface_temperature (SUPPORTING)",
+    "status": "OK",
+    "detail": "MODIS/061/MOD11A2 | coverage 2000-02 -> 2026-08 | n=1149 in training window | bands=12 e.g. ['LST_Day_1km', 'QC_Day', 'Day_view_time', 'Day_view_angl']",
+    "extra": {
+      "asset": "MODIS/061/MOD11A2",
+      "coverage_end": "2026-08"
+    }
+  },
+  {
+    "name": "GEE soil_moisture_satellite (OPTIONAL)",
+    "status": "OK",
+    "detail": "NASA/SMAP/SPL4SMGP/008 | coverage 2015-03 -> 2026-09 | n=31414 in training window | bands=46 e.g. ['sm_surface', 'sm_rootzone', 'sm_profile', 'sm_surface_wetness']",
+    "extra": {
+      "asset": "NASA/SMAP/SPL4SMGP/008",
+      "coverage_end": "2026-09"
+    }
+  },
+  {
+    "name": "GEE terrestrial_water_storage (OPTIONAL)",
+    "status": "WARN",
+    "detail": "NASA/GRACE/MASS_GRIDS_V04/MASCON_CRI | coverage 2002-04 -> 2024-09 | n=238 in training window | bands=2 e.g. ['lwe_thickness', 'uncertainty'] | record ends 2024-09, 15 months before the study period ends (2025-12) - unusable over the later split(s)",
+    "extra": {
+      "asset": "NASA/GRACE/MASS_GRIDS_V04/MASCON_CRI",
+      "coverage_end": "2024-09"
+    }
+  },
+  {
+    "name": "GEE land_cover (MASKING)",
+    "status": "OK",
+    "detail": "ESA/WorldCover/v200 | coverage 2021-01 -> 2021-01 | n=1 in training window | bands=1 e.g. ['Map']",
+    "extra": {
+      "asset": "ESA/WorldCover/v200",
+      "coverage_end": "2021-01"
+    }
+  },
+  {
+    "name": "GEE basin_boundary (AOI)",
+    "status": "OK",
+    "detail": "WWF/HydroSHEDS/v1/Basins/hybas_5 | features intersecting AOI n=5",
+    "extra": {
+      "asset": "WWF/HydroSHEDS/v1/Basins/hybas_5",
+      "coverage_end": null
+    }
+  },
+  {
+    "name": "GEE dem (SUPPORTING)",
+    "status": "OK",
+    "detail": "USGS/SRTMGL1_003 | static image | bands=['elevation']",
+    "extra": {
+      "asset": "USGS/SRTMGL1_003",
+      "coverage_end": null
+    }
   },
   {
     "name": "Copernicus GDO WCS (benchmark SPI / GRACE TWS)",

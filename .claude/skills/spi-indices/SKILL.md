@@ -24,9 +24,19 @@ error, and every downstream result inherits the mistake. Validate before trustin
 - **Fit parameters on the training period only.** Fitting on the full record leaks
   test-period statistics into training. State the reference period everywhere.
 - **State the reference period in every output and figure.** SPI values are
-  meaningless without it; 1991-2020 is the current WMO normal.
-- **Minimum record length: 30 years for stable fits.** With 25 years, say so as a
-  limitation rather than pretending otherwise.
+  meaningless without it. 1991-2020 is the current WMO normal, but **this project
+  does not use it** - it overlaps the validation years and is not a subset of the
+  training window. The periods are `baseline_precip_era5` (1981-2016) for
+  precipitation- and ERA5-derived indices and `baseline_modis` (2001-2016) for
+  MODIS-derived anomalies, defined in `config/data.yaml`. Read them from config;
+  never hardcode a period.
+- **Minimum record length: 30 years for stable fits.** `baseline_precip_era5`
+  clears this at 36 years. `baseline_modis` does not - 16 years - and that is
+  declared as a limitation in the data dictionary and the model card rather than
+  glossed over.
+- **A long reference period shifts the anomalies.** Starting in 1981 means recent
+  values are compared against a cooler, wetter-relative baseline and therefore read
+  drier. Correct, but say so wherever the anomalies appear.
 - **Accumulation window vs forecast lead.** SPI-k at lead L < k overlaps the
   observed period by (k - L) months. Never forecast such a pair without the
   known-accumulation baseline.

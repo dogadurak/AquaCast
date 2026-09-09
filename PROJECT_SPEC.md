@@ -107,8 +107,8 @@ Every dataset below was checked for availability, licence and record length befo
 
 | Variable | Source | Access | Record | Role |
 |---|---|---|---|---|
-| Precipitation | CHIRPS v3 (0.05°) | GEE, free | 1981– | SPI input, validated for monthly use over Türkiye |
-| Precipitation, temperature, soil moisture, PET | ERA5-Land (~9 km) | CDS API, free w/ token | 1950– | Core predictors; SPEI input |
+| Precipitation | CHIRPS v3 (0.05°) | GEE, free | 1981– | SPI input, validated for monthly use over Türkiye. **Exported from 1981**, not 2001: the extra years are the `baseline_precip_era5` reference period (§4.2) |
+| Precipitation, temperature, soil moisture, PET | ERA5-Land (~9 km) | GEE (`ECMWF/ERA5_LAND/MONTHLY_AGGR`) for the panel; CDS API for variables GEE does not carry | 1950– | Core predictors; SPEI input. **Exported from 1981** to match the precipitation reference period |
 | Seasonal forecast ensemble | C3S seasonal monthly statistics (multi-system, ≤6 months lead) | CDS API, free w/ token | hindcast 1993– | **Tier 2 predictors** |
 | NDVI | MODIS MOD13A2 (1 km, 16-day) | GEE, free | 2000– | Vegetation stress |
 | NDVI continuity | VIIRS VNP13A1 | GEE, free | 2012– | Successor after MODIS shutdown |
@@ -161,7 +161,20 @@ Per grid cell, per month *t*:
 - Seasonality: month-of-year encoded cyclically
 - **Tier 2 only:** C3S ensemble mean and spread of forecast precipitation and temperature for the target window, plus terciles
 
-Feature engineering rule: **anomalies, not raw values**, computed against a fixed 1991–2020 climatological baseline calculated *only from the training period* to avoid leaking test-period statistics into the normalisation.
+Feature engineering rule: **anomalies, not raw values**, computed against a fixed climatological reference period calculated *only from data outside the held-out splits*, to avoid leaking validation- or test-period statistics into the normalisation.
+
+**Reference periods (corrects the draft spec).** The draft named 1991–2020, the current WMO normal. That period cannot be used here: training ends in 2016, so 1991–2020 is not a subset of the training window, and it overlaps the validation years 2018–2020. Anomalies computed against it would carry held-out statistics into training — the exact failure §0.1 Problem 3 warns about, in a different guise. Two reference periods replace it, because MODIS does not reach as far back as the climate records:
+
+| Reference period | Span | Applies to | Note |
+|---|---|---|---|
+| `baseline_precip_era5` | **1981–2016** (36 yr) | CHIRPS and ERA5-Land derived: precipitation, T2m, PET, soil water, SPI-1/3/6/12, SPEI-3/6, `sm_anom` | Above the WMO-recommended 30-year minimum for stable gamma fits. Start year is the CHIRPS record start; ERA5-Land reaches 1950 but is truncated to match so both precipitation products share one period. |
+| `baseline_modis` | **2001–2016** (16 yr) | MOD13/MOD16/MOD11 derived: NDVI, ET, LST, `ndvi_anom`, `lst_anom` | Below the 30-year guidance — MODIS begins in 2000. Declared as a limitation in `docs/data_dictionary.md` and `reports/model_card.md`, not hidden. |
+
+Neither period intersects validation (2018–2020) or test (2022–2025). The periods are defined once in `config/data.yaml` and enforced by `tests/test_leakage.py::test_baseline_periods_exclude_val_and_test`, so that this correction cannot silently regress.
+
+Pulling precipitation back to 1981 means the CHIRPS and ERA5-Land exports cover 1981–2025 while the modelling panel still starts in 2001, where MODIS does. Only the index and anomaly fitting uses the extra years.
+
+**Known side effect, to be stated wherever anomalies are reported.** A reference period beginning in 1981 includes pre-warming years, so recent anomalies read drier than they would against a later normal. This is not an error — the longer period is the statistically better choice — but the comparison is against a cooler baseline and must be said plainly rather than left for a reader to discover.
 
 ### 4.3 Models
 

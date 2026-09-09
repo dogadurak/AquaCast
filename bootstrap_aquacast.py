@@ -149,9 +149,17 @@ period:
   end: 2025-12-31
 
 climatology:
-  baseline_start: 1991-01-01
-  baseline_end: 2020-12-31
-  # baseline statistics must be computed from TRAINING data only
+  # Two reference periods. The 1991-2020 WMO normal is NOT usable here: training
+  # ends in 2016, so it is not a subset of the training window, and it overlaps
+  # validation (2018-2020). See PROJECT_SPEC.md section 4.2.
+  # The authoritative copy of this block is config/data.yaml in the repository -
+  # this template only has to avoid reintroducing the leak.
+  baseline_precip_era5:
+    start: 1981-01-01
+    end: 2016-12-31
+  baseline_modis:
+    start: 2001-01-01
+    end: 2016-12-31
 
 sources:
   precipitation_primary: UCSB-CHC/CHIRPS/V3/PENTAD
@@ -450,9 +458,11 @@ error, and every downstream result inherits the mistake. Validate before trustin
 - **Fit parameters on the training period only.** Fitting on the full record leaks
   test-period statistics into training. State the reference period everywhere.
 - **State the reference period in every output and figure.** SPI values are
-  meaningless without it; 1991-2020 is the current WMO normal.
-- **Minimum record length: 30 years for stable fits.** With 25 years, say so as a
-  limitation rather than pretending otherwise.
+  meaningless without it. 1991-2020 is the current WMO normal, but this project
+  does not use it - it overlaps the validation years. Read the periods from
+  `config/data.yaml`; never hardcode one.
+- **Minimum record length: 30 years for stable fits.** Where the data cannot reach
+  30 years, say so as a limitation rather than pretending otherwise.
 - **Accumulation window vs forecast lead.** SPI-k at lead L < k overlaps the
   observed period by (k - L) months. Never forecast such a pair without the
   known-accumulation baseline.

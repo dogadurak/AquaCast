@@ -11,11 +11,66 @@ grid:
 period:
   start: 2001-01-01
   end: 2025-12-31
+  # Index/anomaly fitting reaches further back than the panel itself - see
+  # climatology.baseline_precip_era5. Only precipitation and ERA5-Land are
+  # pulled for those extra years; the modelling panel still starts in 2001
+  # because MODIS does.
+  index_fit_start: 1981-01-01
 
 climatology:
-  baseline_start: 1991-01-01
-  baseline_end: 2020-12-31
-  # baseline statistics must be computed from TRAINING data only
+  # TWO reference periods, because MODIS does not reach as far back as
+  # CHIRPS/ERA5-Land. Both lie strictly inside the training window: neither
+  # touches validation (2018-2020) or test (2022-2025).
+  # Enforced by tests/test_leakage.py::test_baseline_periods_exclude_val_and_test.
+  #
+  # This supersedes the 1991-2020 WMO normal named in the earlier draft spec.
+  # That period was unusable here on two counts: it is not a subset of the
+  # training window (train ends 2016), and it overlaps the validation years,
+  # so every anomaly computed against it would carry validation-period
+  # statistics into training. See PROJECT_SPEC.md section 4.2.
+  baseline_precip_era5:
+    start: 1981-01-01
+    end: 2016-12-31
+    applies_to:
+      - precip_chirps_mm
+      - precip_era5_mm
+      - t2m_c
+      - pet_mm
+      - swvl1
+      - swvl2
+      - swvl3
+      - swvl4
+      - spi_1
+      - spi_3
+      - spi_6
+      - spi_12
+      - spei_3
+      - spei_6
+      - sm_anom
+    note: >
+      36 years, above the WMO-recommended 30-year minimum for stable gamma
+      fits. Start year is the CHIRPS record start; ERA5-Land reaches 1950 but
+      is truncated to match so that both precipitation products share one
+      reference period.
+    caveat: >
+      Beginning in 1981 includes pre-warming years, so recent anomalies read
+      drier than they would against a later normal. This is not an error - a
+      longer normal is the statistically better choice - but it must be stated
+      wherever anomalies are reported. Recorded in reports/model_card.md.
+  baseline_modis:
+    start: 2001-01-01
+    end: 2016-12-31
+    applies_to:
+      - ndvi
+      - et_mm
+      - pet_modis_mm
+      - lst_day_c
+      - ndvi_anom
+      - lst_anom
+    note: >
+      16 years only - MODIS begins in 2000 and 2001 is its first full year.
+      Below the 30-year guidance. Documented as a limitation in
+      docs/data_dictionary.md and reports/model_card.md rather than hidden.
 
 sources:
   precipitation_primary: UCSB-CHC/CHIRPS/V3/PENTAD

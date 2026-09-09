@@ -12,7 +12,7 @@ A drought forecasting system for the Konya Closed Basin whose distinguishing fea
 
 2. **Never let a forecast target overlap its predictor window.** SPI-*k* accumulates *k* months. Forecasting SPI-6 at lead +3 means three of six months are already observed and the result is meaningless. Approved target/lead pairs are in `PROJECT_SPEC.md` §4.1. Adding a new pair requires explicitly demonstrating no overlap.
 
-3. **Never compute climatology or normalisation statistics using test-period data.** The 1991–2020 baseline must be derived from the training period only. Anomalies, gamma-fit parameters for SPI, and scalers are all fitted on train and applied to validation and test.
+3. **Never compute climatology or normalisation statistics using held-out data.** The reference periods live in `config/data.yaml` under `climatology`, and there are two because MODIS does not reach as far back as CHIRPS/ERA5-Land: `baseline_precip_era5` (1981–2016) and `baseline_modis` (2001–2016). Both end where training ends. The 1991–2020 WMO normal named in the draft spec is **not** usable here — it is not a subset of the training window and it overlaps validation (2018–2020). Anomalies, gamma-fit parameters for SPI, and scalers are fitted on the reference period and applied unchanged to validation and test. Enforced by `tests/test_leakage.py::test_baseline_periods_exclude_val_and_test`.
 
 4. **Never pool metrics across all rows.** Compute per forecast date, then aggregate. ~600,000 rows represent roughly 300 effective time steps; pooling inflates confidence by more than an order of magnitude.
 
@@ -45,7 +45,8 @@ et_mm, pet_modis_mm float64   MOD16A2GF
 lst_day_c          float64    MOD11A2 daytime LST
 spi_1, spi_3, spi_6, spi_12   float64   computed, train-period gamma fit
 spei_3, spei_6     float64
-sm_anom, ndvi_anom, lst_anom  float64   vs 1991–2020 train-period baseline
+sm_anom                       float64   vs baseline_precip_era5 (1981–2016)
+ndvi_anom, lst_anom           float64   vs baseline_modis (2001–2016)
 elevation_m, slope_deg, aspect_deg  float64   static
 landcover          category   ESA WorldCover class
 ```

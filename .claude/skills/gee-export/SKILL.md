@@ -69,6 +69,16 @@ Defences, all three together:
 3. Write atomically, so a failed assertion leaves no file behind for resume logic to
    trust later.
 
+## CHIRPS pentads
+
+Each month holds exactly **six** pentads, and the sixth is variable length - it runs
+to the end of the month, so 3 to 6 days. Summing a month with `filterDate` is
+therefore safe: pentads never straddle a month boundary. Assert the count is 6 per
+month anyway; a missing pentad is a silent 17% shortfall in that month's total.
+
+The variable sixth pentad does matter the moment anything is divided by a period
+length - a daily mean, an intensity, a rate. The divisor is not a constant 5.
+
 ## Heavy reductions on 10 m data
 
 Aggregating 10 m WorldCover to the analysis grid across a whole basin exceeds the

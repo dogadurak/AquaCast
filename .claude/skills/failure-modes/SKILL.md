@@ -209,6 +209,76 @@ Make silent corruption impossible. Accept rework.
   bbox from that code path entirely. Bounding boxes are for probing; polygons are for
   analysis.
 
+## 15. A threshold set at a multiple of the physical maximum
+**Class:** silent corruption of the verification layer — a cousin of entry 10
+
+- **SYMPTOM:** An assertion that passes on every run and feels like a range check.
+  Written in this project: "monthly precipitation < 1000 mm". The basin's *annual*
+  mean is 417 mm, so that ceiling is two and a half times a whole year's rainfall.
+- **MECHANISM:** Choosing a bound that is obviously safe rather than one that is
+  actually informative. Such a threshold catches only absurd failures — a unit
+  confusion by three orders of magnitude — and passes every plausible one: a factor
+  of two, a missing pentad, a wrong accumulation window.
+- **DEFENCE:** **An assertion must fail on values that are plausible but wrong.**
+  Anchor the bound to an independent published quantity and put the tolerance where
+  a real error would land. Here: basin-mean *annual* total against the ministry's
+  417 mm, expected 350–500 mm, which a missing pentad (−17%) would break. Ask of
+  every threshold: what realistic bug does this catch? If the answer is "none",
+  it is decoration.
+
+## 16. A stitched product series read as one instrument
+**Class:** silent corruption — and it imitates the very signal being studied
+
+- **SYMPTOM:** A trend. The model appears to learn something real about climate.
+- **MECHANISM:** Long satellite records are often several production lines spliced:
+  CHIRPS has an ERA5-based reanalysis line and an IMERG-based near-real-time line,
+  plus a final/preliminary distinction whose recent months get revised. If the line
+  changes between the reference period (1981–2016 here) and the test period
+  (2022–2025), anomalies are measured with one product against a baseline fitted on
+  another. The systematic offset is indistinguishable from a climate signal, and
+  what the model learns is the product change.
+- **DEFENCE:** Check before exporting, not after. Look for a per-image
+  source/version property; if there is none — as with CHIRPS v3 PENTAD in GEE, which
+  carries only year, month and pentad — the time series is the only evidence, so
+  plot basin-mean annual totals and look for a level shift. Beware the era mean as a
+  detector: one extreme year drags it and imitates a step. The discriminator is that
+  a production change moves *every* year after the transition, so a single
+  post-transition year at or above the long-term mean rules a level shift out.
+  Record the fetch date in a manifest, because final products get reprocessed and
+  the same export can return different numbers months later.
+
+## 17. An assertion that encodes the analyst's expectation, not a property of the data
+**Class:** rework — it fires loudly, but on the wrong thing
+
+- **SYMPTOM:** A well-motivated check fails, and the instinct is that the data is
+  broken. Written here: "exact-zero precipitation months should concentrate in
+  July–September, because Konya summers are dry". It failed. The zeros were in March.
+- **MECHANISM:** The assertion tested a belief about the region rather than a
+  property that distinguishes the two outcomes. The belief was wrong for this
+  product: CHIRPS overestimates low precipitation amounts, so the climatological dry
+  season rarely reaches exact zero — the basin minimum in July 1990, the driest month
+  of a dry year, was 2.42 mm across all 2,820 cells. Zeros mark *exceptional* months,
+  not the dry season.
+- **DEFENCE:** Test the mechanism that separates the outcomes, not a correlate of it.
+  Masked pixels produce an isolated spike at exactly 0.0 with a gap above it; a
+  genuine dry month produces a continuous ramp down to zero. So the check is: does
+  every month containing zeros also contain values in (0, 1) mm? That is a property
+  of the distribution, true regardless of season or region. When an assertion fails,
+  ask which of the two — the expectation or the data — is being tested, before
+  assuming the data lost.
+
+## 18. Collection-level counts mistaken for per-pixel counts
+**Class:** silent corruption
+
+- **SYMPTOM:** None. The monthly total is plausible, merely too low.
+- **MECHANISM:** `ImageCollection.size()` says how many images are in the window. It
+  says nothing about how many contributed *at a given pixel*. `sum()` skips masked
+  pixels, so a cell masked in two of six pentads gets a four-pentad total, and no
+  count, range check or null check notices.
+- **DEFENCE:** Carry a per-pixel `count()` band alongside the sum and assert it
+  equals the expected number of observations for **every row**, not once per month.
+  The collection-level check stays too — they catch different failures.
+
 ---
 
 ## Adding an entry

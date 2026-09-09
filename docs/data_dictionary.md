@@ -129,6 +129,60 @@ The ring covers the case where it does not.
 
 ---
 
+## 1.5 CHIRPS v3 — product continuity, bias, and what a zero means
+
+Checked **before** the export by `python -m scripts.check_chirps_continuity`;
+numbers in `reports/chirps_continuity.json`, figure in
+`reports/figures/chirps_continuity_*.png`.
+
+**Is the series one product?** CHIRPS has an ERA5-based reanalysis line and an
+IMERG-based near-real-time line, plus a final/preliminary distinction. If the line
+changed between the reference period (1981–2016) and the test period (2022–2025),
+anomalies would be measured with one product against a baseline fitted on another,
+and that offset would look exactly like a climate signal.
+
+- **Metadata cannot settle it.** `UCSB-CHC/CHIRPS/V3/PENTAD` carries only `year`,
+  `month` and `pentad` per image — no source, version or preliminary flag. So no
+  provenance column can be added to the panel, and the time series is the only
+  available evidence. This is itself a limitation for the model card.
+- **No level shift.** Basin-mean annual totals 1981–2025 show no discontinuity; the
+  12-month rolling mean holds a stable level throughout. The 2022–2025 era mean is
+  low (399 mm against 463 mm overall), but that is one exceptional year, not a step:
+  **2023 sits at 467 mm, above the long-term mean**, and a production change would
+  move every year after the transition. 2025 (287 mm) is the driest year in the
+  45-year record; the eight driest years span four decades.
+- **Preliminary data — unresolved.** With no flag, whether recent months are
+  preliminary cannot be determined from GEE. Recent months therefore may be revised.
+  Each year file carries a manifest with `fetched_utc` so a later divergence is
+  attributable rather than mysterious.
+
+**Bias against the official climatology — the first number of the CHIRPS comparison.**
+
+| Quantity | Value |
+|---|---|
+| CHIRPS v3 basin-mean annual total, 1981–2025 | **463.1 mm** |
+| Published basin-mean annual total (SYGM, Konya Havzası Tanıtım) | **417 mm** |
+| CHIRPS bias | **+11.1%** |
+
+The same ministry report gives the basin area as 4,980,534 ha = 49,805 km², matching
+the official area in §1.3 — so both figures describe the same delineation. A positive
+bias is the documented behaviour of CHIRPS over Türkiye, and this is its magnitude for
+this basin. It is a result, not only an assertion.
+
+**What an exact zero means.** CHIRPS overestimates low precipitation amounts, so the
+climatological dry season rarely reaches exact zero: in July 1990 — the driest month
+of a dry year — the basin **minimum** was 2.42 mm across all 2,820 cells, and not one
+cell recorded zero. Exact zeros instead mark exceptional months in any season: March
+1990 has 2,009 cells at zero with a basin mean of 2.27 mm.
+
+Zeros are therefore validated by the **shape of the distribution**, not by season.
+Masked pixels arriving as 0 would produce an isolated spike at exactly 0.0 with a gap
+above it; a genuine dry month produces a continuous ramp. Every month containing
+zeros must also contain values in (0, 1) mm. Separately, a per-pixel `n_obs` band
+asserts that all six pentads contributed **at every cell** — a collection-level count
+of six says nothing about a pixel masked in two of them, and `sum()` would silently
+return a four-pentad total.
+
 ## 2. Resolution — what each column actually carries
 
 A 0.05° cell fed by 9 km ERA5-Land carries 9 km information. Recorded per column in

@@ -1,0 +1,44 @@
+[
+  {
+    "name": "python packages",
+    "status": "OK",
+    "detail": "all required packages importable",
+    "extra": {}
+  },
+  {
+    "name": "GEE auth",
+    "status": "FAIL",
+    "detail": "EEException: Please authorize access to your Earth Engine account by running\n\nearthengine authenticate\n\nin your command line, or ee.Authenticate() in Python, and then retry.. Run 'earthengine authenticate' and register a Cloud project for noncommercial use.",
+    "extra": {}
+  },
+  {
+    "name": "Copernicus GDO WCS (benchmark SPI / GRACE TWS)",
+    "status": "WARN",
+    "detail": "HTTP 502",
+    "extra": {
+      "url": "https://drought.emergency.copernicus.eu/api/wcs?service=WCS&version=2.0.1&request=GetCapabilities"
+    }
+  },
+  {
+    "name": "CHIRPS direct archive (UCSB)",
+    "status": "OK",
+    "detail": "HTTP 200",
+    "extra": {
+      "url": "https://data.chc.ucsb.edu/products/CHIRPS/"
+    }
+  },
+  {
+    "name": "CDS API root (needs token for real requests)",
+    "status": "OK",
+    "detail": "HTTP 202",
+    "extra": {
+      "url": "https://cds.climate.copernicus.eu/api"
+    }
+  },
+  {
+    "name": "CDS credentials",
+    "status": "WARN",
+    "detail": "~/.cdsapirc not found. Register at cds.climate.copernicus.eu, copy your personal access token, and accept the licences for 'ERA5-Land monthly averaged data' and 'Seasonal forecast monthly statistics on single levels'.",
+    "extra": {}
+  }
+]

@@ -178,6 +178,23 @@ def atomic_write(df: pd.DataFrame, path: Path | str, *, index: bool = False) -> 
     return path
 
 
+def schema_fingerprint(columns: list[str]) -> str:
+    """Stable fingerprint of a file's column set.
+
+    Resume logic skips files that already exist. That is safe only while the schema
+    is fixed: add a column to an exporter and every previously written year is
+    silently skipped, leaving a panel whose columns depend on when each year
+    happened to be fetched. Nothing errors - T4 just finds nulls it cannot explain.
+
+    Recording the fingerprint in the manifest lets resume distinguish "already done"
+    from "done under a different schema".
+    """
+    import hashlib
+
+    joined = ",".join(columns)
+    return hashlib.sha256(joined.encode("utf-8")).hexdigest()[:16]
+
+
 def report(label: str, expected: Any, actual: Any) -> bool:
     """Print an expected/actual pair and return whether they match.
 

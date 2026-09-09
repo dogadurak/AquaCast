@@ -27,6 +27,7 @@ import pandas as pd
 
 from src.data.gee_io import (
     ROOT,
+    schema_fingerprint,
     atomic_write,
     fetch_features,
     initialize,
@@ -34,11 +35,22 @@ from src.data.gee_io import (
     report,
     with_retry,
 )
-from src.data.grid import GRID_CSV, basin_feature, cell_indices, chirps_projection, lattice_params, make_cell_id
+from src.data.grid import ID_STRIDE, GRID_CSV, basin_feature, cell_indices, chirps_projection, lattice_params, make_cell_id
 
 RAW_DIR = ROOT / "data" / "raw" / "chirps"
 CONTINUITY_JSON = ROOT / "reports" / "chirps_continuity.json"
 PENTADS_PER_MONTH = 6
+
+# Isolated zeros are recorded and flagged, not treated as fatal. They become fatal
+# only if widespread, which would mean systematic masking rather than an artefact.
+ISOLATED_ZERO_MAX_SHARE = 0.01
+# A zero cluster whose surrounding ring is all above this is a cliff, not a gradient -
+# rainfall fields do not step from 0 to several mm across one cell.
+ZERO_CLIFF_MM = 2.0
+
+# Columns this exporter writes. Recorded in every manifest so that resume can tell
+# "already fetched" from "fetched under a different schema" - see gee_io.schema_fingerprint.
+EXPECTED_SCHEMA = ["cell_id", "date", "month", "precip_chirps_mm", "n_pentads", "n_obs"]
 
 # A catastrophic-scale ceiling only. It is deliberately far above anything weather
 # produces here, because it guards against a scale or accumulation blunder - summing
@@ -57,6 +69,88 @@ ABSURD_MONTHLY_MM = 2000.0
 # (server-side reduceRegion over the polygon). Agreement is evidence the sampling
 # and the accumulation window are both right.
 BASIN_MEAN_TOLERANCE = 0.02
+
+
+def zero_diagnostics(df: pd.DataFrame, value_col: str = "precip_chirps_mm") -> tuple[list[dict], int]:
+    """Per month: exact-zero cells, and which of them look like artefacts.
+
+    Seasonality does not separate a real dry month from masked pixels arriving as 0.
+    CHIRPS overestimates low precipitation amounts, so the climatological dry season
+    rarely reaches exact zero here - the basin minimum in July 1990, the driest month
+    of a dry year, was 2.42 mm across all 2,820 cells.
+
+    Neither does a per-cell neighbour test. Requiring a neighbour in (0,1] mm flags a
+    genuinely dry month almost entirely, because there the neighbours are zero too:
+    1990-03 came out as 1,882 "isolated" of 2,009 zeros, which is the opposite of
+    the truth.
+
+    What separates them is the CLUSTER BOUNDARY. Rainfall fields are continuous, so a
+    real dry patch is surrounded by a gradient down to zero, while a masking artefact
+    is an island with a cliff at its edge. So: find connected components of exact
+    zeros, then look at the ring of non-zero cells touching each one. A low boundary
+    minimum means a gradient and the cluster is real; a high one means a cliff.
+
+    1996-04 is the case that prompted this: nine contiguous cells at exactly 0 in a
+    month averaging 64.5 mm, with the nearest non-zero neighbour at 3.11 mm.
+
+    Returns (per-month diagnostics, total cells in artefact-like clusters).
+    """
+    diagnostics: list[dict] = []
+    total_isolated = 0
+    for month, sub in df.groupby("month"):
+        values = dict(zip(sub["cell_id"].astype("int64"), sub[value_col]))
+        zeros = {c for c, v in values.items() if v == 0}
+        if not zeros:
+            continue
+
+        neighbours = lambda c: [                      # noqa: E731
+            (c // ID_STRIDE + di) * ID_STRIDE + (c % ID_STRIDE + dj)
+            for di in (-1, 0, 1) for dj in (-1, 0, 1) if (di, dj) != (0, 0)
+        ]
+
+        seen: set[int] = set()
+        isolated: list[int] = []
+        clusters = []
+        for start in zeros:
+            if start in seen:
+                continue
+            stack, component = [start], []
+            seen.add(start)
+            while stack:
+                cell = stack.pop()
+                component.append(cell)
+                for nb in neighbours(cell):
+                    if nb in zeros and nb not in seen:
+                        seen.add(nb)
+                        stack.append(nb)
+            boundary = [
+                values[nb] for cell in component for nb in neighbours(cell)
+                if nb in values and values[nb] > 0
+            ]
+            boundary_min = min(boundary) if boundary else None
+            artefact = boundary_min is not None and boundary_min > ZERO_CLIFF_MM
+            clusters.append({
+                "size": len(component),
+                "boundary_min_mm": round(boundary_min, 4) if boundary_min is not None else None,
+                "artefact": artefact,
+            })
+            if artefact:
+                isolated.extend(component)
+
+        total_isolated += len(isolated)
+        diagnostics.append({
+            "month": int(month),
+            "n_zero": len(zeros),
+            "n_clusters": len(clusters),
+            "n_isolated": len(isolated),
+            "isolated_cell_ids": sorted(isolated),
+            "largest_cluster": max(c["size"] for c in clusters),
+            "min_boundary_of_artefacts": min(
+                [c["boundary_min_mm"] for c in clusters if c["artefact"]], default=None
+            ),
+            "mean_mm": float(sub[value_col].mean()),
+        })
+    return diagnostics, total_isolated
 
 
 def month_image(chirps: "ee.ImageCollection", start: "ee.Date") -> tuple["ee.Image", "ee.Number"]:
@@ -142,9 +236,15 @@ def export_year(
     path = RAW_DIR / f"chirps_{year}.csv"
     manifest_path = RAW_DIR / f"chirps_{year}.manifest.json"
     if path.exists() and manifest_path.exists():
-        print(f"  {year}: already on disk, skipping "
-              f"(atomic write means present implies complete)")
-        return json.loads(manifest_path.read_text(encoding="utf-8"))
+        cached = json.loads(manifest_path.read_text(encoding="utf-8"))
+        if cached.get("schema_fingerprint") == schema_fingerprint(EXPECTED_SCHEMA):
+            print(f"  {year}: already on disk, skipping (atomic write means present implies complete)")
+            return cached
+        print(f"  {year}: on disk but written under a different schema "
+              f"({cached.get('schema_fingerprint')} != "
+              f"{schema_fingerprint(EXPECTED_SCHEMA)}) - refetching")
+        path.unlink(missing_ok=True)
+        manifest_path.unlink(missing_ok=True)
 
     expected_cells = len(grid_ids)
     frames = []
@@ -197,39 +297,24 @@ def export_year(
                 f"{BASIN_MEAN_TOLERANCE:.0%} tolerance. The per-cell sampling and the "
                 "server-side basin reduction disagree, so one of them is wrong"
             )
-    # Exact zeros: genuine dry month, or masked pixels arriving as 0?
-    #
-    # Seasonality does not separate them. CHIRPS overestimates low precipitation
-    # amounts - a documented bias over Turkiye - so the climatological dry season
-    # rarely reaches exact zero here: the basin minimum in July 1990, the driest
-    # month of a dry year, was 2.42 mm across all 2,820 cells. Zeros instead mark
-    # exceptional months, whatever the season.
-    #
-    # What does separate them is the shape of the distribution near zero. Masked
-    # pixels produce an isolated spike at exactly 0.0 with a gap above it; a real
-    # dry month produces a continuous ramp down to zero. March 1990: 2,009 exact
-    # zeros accompanied by 50 cells in (0, 0.5] - continuous, therefore real.
-    zero_diag = []
-    for m, sub in df.groupby("month"):
-        values = sub["precip_chirps_mm"]
-        n_zero = int((values == 0).sum())
-        if not n_zero:
-            continue
-        near = int(((values > 0) & (values < 1.0)).sum())
-        zero_diag.append({
-            "month": int(m), "n_zero": n_zero, "n_in_0_1mm": near,
-            "mean_mm": float(values.mean()),
-        })
-        if near == 0:
-            problems.append(
-                f"month {m}: {n_zero} cells at exactly 0 mm with no values in "
-                "(0, 1) mm. An isolated spike at zero is the signature of masked "
-                "pixels, not of a dry month"
-            )
+    zero_diag, isolated_total = zero_diagnostics(df)
+
+    isolated_share = isolated_total / (len(grid_ids) * 12)
+    if isolated_share > ISOLATED_ZERO_MAX_SHARE:
+        problems.append(
+            f"{isolated_total} isolated zero cells ({isolated_share:.2%} of rows) "
+            f"exceeds {ISOLATED_ZERO_MAX_SHARE:.0%}. Scattered artefacts are one "
+            "thing; this many means masked pixels are arriving as 0 systematically"
+        )
 
     if problems:
         raise AssertionError(f"{year}: " + "; ".join(problems))
 
+    if df.columns.tolist() != EXPECTED_SCHEMA:
+        raise AssertionError(
+            f"{year}: columns {df.columns.tolist()} do not match EXPECTED_SCHEMA "
+            f"{EXPECTED_SCHEMA} - update the constant deliberately, do not drift"
+        )
     atomic_write(df, path)
     manifest = {
         "year": year,
@@ -250,8 +335,11 @@ def export_year(
                 df.loc[df["precip_chirps_mm"] == 0, "month"].value_counts().sort_index().items()
             },
             "zero_month_diagnostics": zero_diag,
+            "isolated_zero_cells": isolated_total,
         },
         "n_obs_per_pixel": PENTADS_PER_MONTH,
+        "schema_fingerprint": schema_fingerprint(EXPECTED_SCHEMA),
+        "schema_columns": EXPECTED_SCHEMA,
         "basin_mean_annual_mm": basin_mean_annual,
         "preflight_basin_mean_annual_mm": expected_mean,
         "note": (
@@ -326,20 +414,27 @@ def main() -> None:
     ok = report("year files", len(years), len(manifests))
     ok &= report("total rows", len(grid_ids) * 12 * len(years), total_rows)
 
-    # Zeros were validated per year by distribution shape (see export_year).
+    # Zeros are validated per month by LOCAL continuity (see export_year).
     # Reported here so the numbers are visible rather than merely asserted.
     diags = [(m["year"], d) for m in manifests
              for d in m["precip_mm"].get("zero_month_diagnostics", [])]
     total_zeros = sum(m["precip_mm"]["zero_rows"] for m in manifests)
-    print(f"  exact-zero rows: {total_zeros:,} across "
-          f"{len(diags)} month(s) with any zeros")
-    for year, d in diags[:12]:
-        print(f"    {year}-{d['month']:02d}: {d['n_zero']:>6,} zeros, "
-              f"{d['n_in_0_1mm']:>4} cells in (0,1) mm, mean {d['mean_mm']:.2f} mm")
-    if len(diags) > 12:
-        print(f"    ... {len(diags) - 12} more")
-    ok &= report("months with an isolated zero spike (masking signature)", 0,
-                 sum(1 for _, d in diags if d["n_in_0_1mm"] == 0))
+    isolated = sum(m["precip_mm"].get("isolated_zero_cells", 0) for m in manifests)
+    print(f"  exact-zero rows: {total_zeros:,} across {len(diags)} month(s)")
+    flagged = [(y, d) for y, d in diags if d["n_isolated"]]
+    if flagged:
+        print(f"  isolated zeros (no near-zero neighbour) - artefact candidates:")
+        for year, d in flagged[:10]:
+            print(f"    {year}-{d['month']:02d}: {d['n_isolated']:>4} isolated of "
+                  f"{d['n_zero']:>5} zeros, basin mean {d['mean_mm']:6.2f} mm")
+        if len(flagged) > 10:
+            print(f"    ... {len(flagged) - 10} more month(s)")
+    share = isolated / max(sum(m["rows"] for m in manifests), 1)
+    passed = share <= ISOLATED_ZERO_MAX_SHARE
+    print(f"  [{'OK      ' if passed else 'MISMATCH'}] isolated-zero share: expected "
+          f"<= {ISOLATED_ZERO_MAX_SHARE:.0%} -> actual {share:.4%} ({isolated} rows). "
+          "Flagged for T4, neither filled nor dropped.")
+    ok &= passed
 
     if not ok:
         raise AssertionError(

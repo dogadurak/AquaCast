@@ -20,6 +20,7 @@ import pandas as pd
 
 from src.data.gee_io import (
     ROOT,
+    schema_fingerprint,
     atomic_write,
     fetch_features,
     initialize,
@@ -41,6 +42,16 @@ CHIRPS_DIR = ROOT / "data" / "raw" / "chirps"
 
 # ERA5-Land MONTHLY_AGGR holds exactly one image per month.
 IMAGES_PER_MONTH = 1
+
+# Columns this exporter writes. Recorded in every manifest so resume can tell
+# "already fetched" from "fetched under a different schema". Adding a band without
+# bumping this would leave earlier years silently skipped and the panel mixed.
+EXPECTED_SCHEMA = [
+    "cell_id", "date", "month", "t2m_c", "t2m_min_c", "t2m_max_c",
+    "precip_era5_mm", "pet_era5_mm", "pet_era5_raw_m",
+    "swvl1", "swvl2", "swvl3", "swvl4",
+    "era5_native_lon", "era5_native_lat", "n_images", "era5_native_cell_id",
+]
 
 # Resampling from 0.1 to 0.05 degrees quadruples the cell count. Under bilinear
 # almost every analysis cell gets its own interpolated value; under Earth Engine's
@@ -176,8 +187,15 @@ def export_year(
     path = RAW_DIR / f"era5_{year}.csv"
     manifest_path = RAW_DIR / f"era5_{year}.manifest.json"
     if path.exists() and manifest_path.exists():
-        print(f"  {year}: already on disk, skipping")
-        return json.loads(manifest_path.read_text(encoding="utf-8"))
+        cached = json.loads(manifest_path.read_text(encoding="utf-8"))
+        if cached.get("schema_fingerprint") == schema_fingerprint(EXPECTED_SCHEMA):
+            print(f"  {year}: already on disk, skipping")
+            return cached
+        print(f"  {year}: on disk but written under a different schema "
+              f"({cached.get('schema_fingerprint')} != "
+              f"{schema_fingerprint(EXPECTED_SCHEMA)}) - refetching")
+        path.unlink(missing_ok=True)
+        manifest_path.unlink(missing_ok=True)
 
     frames = [
         fetch_month(config, era5, native, region, proj, params, year, m, len(grid_ids))
@@ -286,6 +304,11 @@ def export_year(
         (out["era5_native_lon"] * 1000).round().astype("int64") * 1_000_000
         + (out["era5_native_lat"] * 1000).round().astype("int64")
     )
+    if out.columns.tolist() != EXPECTED_SCHEMA:
+        raise AssertionError(
+            f"{year}: columns {out.columns.tolist()} do not match EXPECTED_SCHEMA "
+            f"{EXPECTED_SCHEMA} - update the constant deliberately, do not drift"
+        )
     atomic_write(out, path)
 
     manifest = {
@@ -294,6 +317,8 @@ def export_year(
         "fetched_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "rows": len(out),
         "cells": len(grid_ids),
+        "schema_fingerprint": schema_fingerprint(EXPECTED_SCHEMA),
+        "schema_columns": EXPECTED_SCHEMA,
         "resampling": "bilinear",
         "min_distinct_value_ratio": min_ratio,
         "nearest_neighbour_would_give": "~0.25",

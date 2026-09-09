@@ -61,10 +61,23 @@ grid:
     cells_after_mask: 2130            # crop_frac_2021 >= 0.5, an ANALYSIS filter not an export one
     months_1981_2025: 540
 
-  # Export one extra cell ring beyond the basin. The official boundary is ~17%
-  # SMALLER than HydroBASINS, so it almost certainly lies INSIDE it - which makes a
-  # boundary revision a filter rather than a re-download. The ring covers the case
-  # where it does not, at a cost of a few percent more cells.
+  # Export one extra cell ring beyond the basin.
+  #
+  # WHY THE RING EXISTS - the reason changed after T1, so it is written down.
+  # Originally it insured against the official boundary reaching outside
+  # HydroBASINS. T1 measured the official basin at ~17% SMALLER, so it almost
+  # certainly lies inside, and that original justification is weak.
+  #
+  # It is kept for the reason that survives: when the DSI shapefile arrives, that
+  # boundary will not coincide with HydroBASINS-minus-Akarcay. It is an
+  # independently digitised line and will depart from ours in BOTH directions along
+  # its length, not only inward. Any cell it picks up that we never exported would
+  # mean re-running the whole export to recover a handful of cells.
+  #
+  # The ring now costs nothing: range and sanity checks are restricted to the
+  # analysis population, so ring cells - which sit partly on the Taurus flank, a
+  # completely different precipitation regime - can no longer trigger false alarms.
+  # See failure-modes entry 19.
   #
   # Membership is a COLUMN, never a row filter. Nothing is dropped at export time:
   #   in_hydrobasins   bool   cell centre inside the HydroBASINS polygon

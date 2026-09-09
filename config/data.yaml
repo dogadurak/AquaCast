@@ -3,13 +3,46 @@ aoi:
   bbox: [31.4, 36.7, 35.2, 39.4]      # W, S, E, N (EPSG:4326) - availability probing only
   boundary_source: WWF/HydroSHEDS/v1/Basins/hybas_5
   hybas_id: 2050085960                # the only ENDO=2 (endorheic sink) polygon over the AOI
-  area_km2: 58374
+  area_km2_hydrobasins: 58374        # attribute 58373.7; geodesic recompute 58373.9
+  official_area_km2_text: 49805.34   # SYGM page, prose
+  official_area_km2_table: 50028     # SYGM page, table
+  official_area_source: >
+    T.C. Tarim ve Orman Bakanligi, Su Yonetimi Genel Mudurlugu - Konya Kapali
+    Havzasi. https://www.tarimorman.gov.tr/SYGM/Sayfalar/Detay.aspx?SayfaId=135
+    The page gives 49,805.34 km2 in prose and 50,028 km2 in its table; both are
+    recorded because the project should not silently pick the more convenient one.
   area_caveat: >
-    HydroBASINS level 5 delineates 58,374 km2. The figure usually cited for the
-    DSI Konya Closed Basin is ~50,000 km2 - a ~17% difference in delineation, not
-    a rounding difference. Replace with the official DSI boundary when obtainable
-    and re-run the export; until then this is a documented approximation and any
-    basin-total figure inherits it.
+    HydroBASINS level 5 delineates 58,374 km2 against an official 49,805-50,028
+    km2 - a delineation difference of about +17%, not rounding. HydroBASINS is
+    derived from HydroSHEDS flow directions, and endorheic basins are precisely
+    where that derivation is weakest: with no outlet, the boundary depends on
+    sink-filling choices. PROJECT_SPEC already marked HydroBASINS a fallback.
+    Any basin-total figure inherits this difference and must say so.
+
+  # MEASURED, not assumed: the HydroBASINS L5 polygon is a merge of NINE distinct
+  # HydroSHEDS level-6 endorheic sinks, and the +17% excess is almost exactly one
+  # of them - MAIN_BAS 2060086420, 8,096 km2, spanning 30.00-31.83 E / 38.06-39.13 N.
+  # That is the Aksehir-Eber lake system, i.e. the AKARCAY closed basin, which the
+  # ministry lists as a neighbour of Konya, not part of it (published Akarcay
+  # drainage area ~7,400 km2).
+  #
+  # Dropping it alone gives 50,278 km2: +0.95% against the official prose figure and
+  # +0.50% against the table figure. Every other single sub-basin is at least 7.5%
+  # off, so the match is not one of many possible coincidences.
+  #
+  # This is a hypothesis supported by area and geography, NOT a verified geometry
+  # match - the official polygon is still not in hand.
+  akarcay_lobe_main_bas: 2060086420
+  akarcay_lobe_area_km2: 8096
+  akarcay_published_area_km2: 7400
+
+  # Which membership column selects the cells used for analysis. Changing the
+  # boundary is a config change, not a re-export: see grid.buffer_cells.
+  # Available columns, cheapest to most faithful:
+  #   in_hydrobasins                     as delivered, includes the Akarcay lobe
+  #   in_hydrobasins AND NOT in_akarcay_lobe   provisional best approximation
+  #   in_official                        added when the DSI/SYGM geometry arrives
+  membership_column: in_hydrobasins
 
 grid:
   # DESIGN RULE - forecast at the resolution the physics supports; observe at the
@@ -24,10 +57,21 @@ grid:
     resolution_deg: 0.05
     reference_collection: UCSB-CHC/CHIRPS/V3/PENTAD
     nominal_scale_m: 5566             # informational only - never a reprojection target
-    cells_in_basin: 2395
-    cells_after_mask: 2130
+    cells_in_basin: 2395              # measured; cells whose centre falls in the polygon
+    cells_after_mask: 2130            # crop_frac_2021 >= 0.5, an ANALYSIS filter not an export one
     months_1981_2025: 540
-    expected_rows: 1150200            # 2130 x 540 - asserted by the exporter
+
+  # Export one extra cell ring beyond the basin. The official boundary is ~17%
+  # SMALLER than HydroBASINS, so it almost certainly lies INSIDE it - which makes a
+  # boundary revision a filter rather than a re-download. The ring covers the case
+  # where it does not, at a cost of a few percent more cells.
+  #
+  # Membership is a COLUMN, never a row filter. Nothing is dropped at export time:
+  #   in_hydrobasins   bool   cell centre inside the HydroBASINS polygon
+  #   in_official      bool   added later, when the official boundary is obtained
+  #   crop_frac_2021   float  cropland/rangeland fraction as of the 2021 WorldCover epoch
+  # Analysis selects rows via aoi.membership_column and mask.min_fraction.
+  buffer_cells: 1
 
   # Every forecast, every baseline and every skill metric is produced on the
   # analysis grid, Tier 1 and Tier 2 alike. No exceptions.
@@ -60,7 +104,13 @@ grid:
 
   mask:
     landcover_classes: [30, 40]       # ESA WorldCover: 30 grassland, 40 cropland
-    min_fraction: 0.5                 # keep cells that are majority cropland/rangeland
+    column: crop_frac_2021            # the epoch is IN THE NAME - the mask is one year, the panel is 45
+    min_fraction: 0.5                 # ANALYSIS threshold, applied at model time - never an export filter
+    threshold_sensitivity: >
+      Cell counts at thresholds 0.2 / 0.3 / 0.5 are 2279 / 2256 / 2130. The result
+      is insensitive to the threshold because the basin is overwhelmingly cropland
+      and rangeland; 0.5 is chosen as "the majority of the cell", the statement
+      easiest to defend.
     fraction_estimator: >
       Cropland fraction is estimated from a regular 100 m subsample of the 10 m
       WorldCover grid (~3,100 samples per 0.05 deg cell, standard error under 1%).
@@ -157,6 +207,9 @@ era5_bands:
   swvl2: volumetric_soil_water_layer_2
   swvl3: volumetric_soil_water_layer_3
   swvl4: volumetric_soil_water_layer_4
+
+gee:
+  project: mythic-brook-481108-h7   # override with the EE_PROJECT environment variable
 
 export:
   chunk_by: year                 # file granularity

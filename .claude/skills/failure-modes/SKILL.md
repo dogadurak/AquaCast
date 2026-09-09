@@ -134,6 +134,81 @@ Make silent corruption impossible. Accept rework.
 - **DEFENCE:** Take identifiers from the URL or the API response, never from
   translated UI chrome, and echo the ID back for confirmation before depending on it.
 
+## 10. The tautological assertion
+**Class:** silent corruption of the verification layer itself — the worst kind
+
+- **SYMPTOM:** An assertion that has never failed and never will. It reads like
+  rigour. Example actually written in this project: "assert the basin area is within
+  1% of 58,374 km²" — where 58,374 was measured from that same polygon minutes
+  earlier.
+- **MECHANISM:** Measuring a quantity, then asserting the quantity equals the
+  measurement. The check compares a value to itself, so it passes under every
+  possible state of the world, including a completely wrong polygon. Writing the
+  assertion after seeing the number makes this almost automatic.
+- **DEFENCE:** Every assertion must be able to name a state of the world in which it
+  fails. If none exists, it is decoration. Validate against an **independent** source
+  — published figures, a reference implementation, a physical constraint — not
+  against your own prior output. And when the independent source disagrees, the rule
+  is *report the discrepancy*, not *assert and move on*.
+
+## 11. A single-epoch auxiliary layer applied to a multi-epoch panel
+**Class:** silent corruption
+
+- **SYMPTOM:** Nothing. Every row has a plausible mask value and the panel is
+  internally consistent.
+- **MECHANISM:** ESA WorldCover v200 maps one year, 2021. Applying it across a
+  1981–2025 panel asserts that land cover held still for 45 years. In the Konya basin
+  it emphatically did not: irrigated agriculture expanded substantially over exactly
+  this period, and that expansion is among the causes of the water crisis being
+  studied. A cell that was rangeland in 1985 enters the panel because it is cropland
+  in 2021.
+- **DEFENCE:** Keeping the mask static is still right — a time-varying mask would
+  break panel consistency and make cells appear and disappear. The defence is
+  naming: the column is `crop_frac_2021`, not `crop_frac`, so the name cannot
+  mislead. Recorded in `docs/data_dictionary.md` and `reports/model_card.md` as a
+  limitation. Generalise: any auxiliary layer with a single epoch applied across a
+  long panel carries its epoch in its column name.
+
+## 12. Hardcoded grid constants instead of the source projection
+**Class:** rework, occasionally silent
+
+- **SYMPTOM:** A grid-alignment assertion passes, so the grid is believed correct.
+- **MECHANISM:** Writing `(lon + 180 - 0.025) / 0.05` bakes in an assumed origin and
+  step. The assertion then tests the assumption against itself rather than against
+  the data. Worse, a wrong origin that differs from the true one by a whole multiple
+  of the step still passes — so the check is silent precisely when it is wrong in the
+  most plausible way. CHIRPS v3 is a new product; assuming v2's extent would be
+  exactly this kind of quiet mistake.
+- **DEFENCE:** Read `crs_transform` from the collection's own projection at runtime,
+  derive origin and step from it, and log the derived values. Then the assertion
+  tests the data, not the belief.
+
+## 13. `reduceResolution` maxPixels ceiling
+**Class:** rework (it errors loudly), but it derails a design if unanticipated
+
+- **SYMPTOM:** "User memory limit exceeded" on what looks like a simple aggregation.
+- **MECHANISM:** `reduceResolution` caps at 65,536 input pixels per output pixel.
+  Aggregating 10 m WorldCover into a 0.05° (~5.5 km) cell needs ~555 × 555 ≈ 308,000
+  — nearly five times over. No amount of `tileScale` fixes an arithmetic ceiling.
+- **DEFENCE:** Compute the fraction at ~100 m instead: reproject the binary mask to
+  100 m, then reduce to the analysis grid (~3,100 pixels per cell, comfortably under
+  the cap). For a threshold comparison 100 m is far more precision than the decision
+  needs; 10 m buys nothing and burns quota. Check the pixel-ratio arithmetic *before*
+  writing the reduction, not after the error.
+
+## 14. An AOI bounding box silently clipping the real geometry
+**Class:** silent corruption
+
+- **SYMPTOM:** The export runs, the grid looks sensible, and part of the study area
+  is simply absent. No error, because a smaller region is a perfectly valid region.
+- **MECHANISM:** A bbox written for one purpose (availability probing) gets reused as
+  a spatial filter. The configured AOI bbox here starts at 31.4°E while the basin
+  polygon reaches 30.0°E — a 1.4° strip that would have vanished without complaint.
+- **DEFENCE:** Never filter analysis geometry by a convenience bbox. Assert that the
+  authoritative geometry is fully contained in any bbox that touches it, or drop the
+  bbox from that code path entirely. Bounding boxes are for probing; polygons are for
+  analysis.
+
 ---
 
 ## Adding an entry

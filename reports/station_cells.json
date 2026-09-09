@@ -1,0 +1,80 @@
+{
+  "note": "Station coordinates are APPROXIMATE and must be replaced with MGM's published values before the comparison is reported. A 0.05 deg cell is about 5 km; km_to_cell_centre shows how much room each station has before it falls into a neighbouring cell.",
+  "stations": [
+    {
+      "name": "Konya",
+      "wmo": "17244",
+      "lat": 37.9838,
+      "lon": 32.5742,
+      "elev_m_claimed": 1031,
+      "cell_id": 425100440,
+      "cell_lon": 32.575,
+      "cell_lat": 37.975,
+      "km_to_cell_centre": 0.98,
+      "in_exported_grid": true,
+      "in_hydrobasins": true,
+      "crop_frac_2021": 0.4427,
+      "cell_mean_elev_m": 1020.0
+    },
+    {
+      "name": "Karaman",
+      "wmo": "17246",
+      "lat": 37.193,
+      "lon": 33.217,
+      "elev_m_claimed": 1023,
+      "cell_id": 426400456,
+      "cell_lon": 33.225,
+      "cell_lat": 37.175,
+      "km_to_cell_centre": 2.12,
+      "in_exported_grid": true,
+      "in_hydrobasins": true,
+      "crop_frac_2021": 0.2864,
+      "cell_mean_elev_m": 1028.0
+    },
+    {
+      "name": "Aksaray",
+      "wmo": "17193",
+      "lat": 38.3705,
+      "lon": 33.9985,
+      "elev_m_claimed": 970,
+      "cell_id": 427900432,
+      "cell_lon": 33.975,
+      "cell_lat": 38.375,
+      "km_to_cell_centre": 2.11,
+      "in_exported_grid": true,
+      "in_hydrobasins": true,
+      "crop_frac_2021": 0.7201,
+      "cell_mean_elev_m": 963.3
+    },
+    {
+      "name": "Nigde",
+      "wmo": "17250",
+      "lat": 37.9667,
+      "lon": 34.6792,
+      "elev_m_claimed": 1211,
+      "cell_id": 429300440,
+      "cell_lon": 34.675,
+      "cell_lat": 37.975,
+      "km_to_cell_centre": 0.99,
+      "in_exported_grid": true,
+      "in_hydrobasins": true,
+      "crop_frac_2021": 0.353,
+      "cell_mean_elev_m": 1241.0
+    },
+    {
+      "name": "Beysehir",
+      "wmo": "17902",
+      "lat": 37.6772,
+      "lon": 31.7522,
+      "elev_m_claimed": 1141,
+      "cell_id": 423500446,
+      "cell_lon": 31.775,
+      "cell_lat": 37.675,
+      "km_to_cell_centre": 2.02,
+      "in_exported_grid": true,
+      "in_hydrobasins": true,
+      "crop_frac_2021": 0.844,
+      "cell_mean_elev_m": 1165.1
+    }
+  ]
+}

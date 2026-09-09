@@ -301,6 +301,25 @@ Make silent corruption impossible. Accept rework.
 - False alarms are not free. They cost a 2.5-hour job and, worse, they train the
   habit of relaxing thresholds until nothing fires.
 
+## 20. A declared assertion that was never wired up
+**Class:** silent corruption of the verification layer — the quietest kind
+
+- **SYMPTOM:** The task passes. The pre-mortem names the check, the constants sit at
+  the top of the module with a careful comment explaining the threshold — and nothing
+  ever calls them. Caught in T3 only by re-reading the file: `MAX_PRECIP_DIVERGENCE`
+  and `MIN_PRECIP_CORRELATION` were defined, documented, and unused, so the ERA5
+  export would have "passed" without the anchor that justified it.
+- **MECHANISM:** Writing the assertion down and implementing it are separate acts,
+  and the first one feels like the second. A constant with a good comment reads as
+  finished work. Nothing in a passing run distinguishes a check that held from a
+  check that never ran.
+- **DEFENCE:** Every constant declared for a check must be referenced by the code
+  that runs it — grep for the name before declaring the task done. Prefer assertions
+  that **print their measured value** (`expected X -> actual Y`) over ones that only
+  raise on failure: a silent pass and an absent check look identical, but a printed
+  number cannot be faked by absence. This is the same reason the working protocol
+  demands the number rather than "the test passed".
+
 ---
 
 ## Adding an entry

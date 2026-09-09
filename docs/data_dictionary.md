@@ -183,6 +183,74 @@ asserts that all six pentads contributed **at every cell** — a collection-leve
 of six says nothing about a pixel masked in two of them, and `sum()` would silently
 return a four-pentad total.
 
+## 1.6 ERA5-Land — soil layers, resampling, and the native-pixel column
+
+### Soil water layers are NOT of equal thickness — a plain mean is forbidden
+
+ERA5-Land reports volumetric soil water in four layers with very different depths:
+
+| Column | Depth | Thickness | Share of the 0–100 cm root zone |
+|---|---|---|---|
+| `swvl1` | 0–7 cm | 7 cm | **0.07** |
+| `swvl2` | 7–28 cm | 21 cm | **0.21** |
+| `swvl3` | 28–100 cm | 72 cm | **0.72** |
+| `swvl4` | 100–289 cm | 189 cm | excluded — below the root zone |
+
+T3 exports the four raw layers unchanged, which is correct: the panel stores what
+the source provides. But **any root-zone quantity derived in T5 must be depth
+weighted** — `0.07·swvl1 + 0.21·swvl2 + 0.72·swvl3` — and a plain arithmetic mean of
+the four layers is **forbidden**.
+
+An unweighted mean over-weights the 7 cm skin layer by a factor of ten. That layer
+responds to individual rain events within days, while the 28–100 cm layer carries
+the seasonal memory that makes soil moisture predictive at +1 month. A plain mean
+would therefore substitute weather noise for exactly the signal this project depends
+on — and it would produce no error, only a worse model that looks fine.
+
+Written here before the derivation exists, so that the rule precedes the code.
+
+### Resampling: bilinear, and it is verified rather than assumed
+
+ERA5-Land is 0.1° (~9 km); the analysis grid is 0.05°. Earth Engine's implicit
+reprojection is **nearest neighbour**, which would copy each native pixel into
+roughly four analysis cells: the field would look smooth and plausible while
+carrying no more information than 0.1°.
+
+The export asserts a **distinct-value ratio** per month — distinct `t2m_c` values
+divided by cell count. Nearest neighbour gives ≈ 0.25; bilinear gives ≈ 1.0.
+Measured: **1.000**. The threshold is 0.90.
+
+### `era5_native_cell_id` — for effective sample size, not for joining
+
+**756** ERA5 native pixels cover the 2,820 analysis cells, about **3.7 cells per
+native pixel**. Four neighbouring analysis cells drawing on one ERA5 pixel are not
+four independent observations.
+
+The column records which native pixel each cell draws from, so Phase 3 can compute
+the effective sample size for ERA5-derived features rather than counting rows. This
+is difficult to reconstruct after the fact, which is why it is exported now.
+
+### Land–sea mask: no cells are lost
+
+ERA5-Land is a land product, so cells over Tuz Gölü, Beyşehir and Akşehir could have
+arrived as no-data. Measured: **zero** no-data cells across the 2,820 — at 0.1°,
+ERA5-Land classifies those cells as land. Recorded because T4 would otherwise have
+had to guess, and because a future ERA5 version could change it. Nothing is filled
+and nothing is dropped.
+
+### Units and sign conventions
+
+| Column | Source band | Conversion |
+|---|---|---|
+| `t2m_c`, `t2m_min_c`, `t2m_max_c` | `temperature_2m[_min/_max]` | K − 273.15 |
+| `precip_era5_mm` | `total_precipitation_sum` | m × 1000 |
+| `pet_era5_mm` | `potential_evaporation_sum` | m × **−1000** |
+| `swvl1..4` | `volumetric_soil_water_layer_1..4` | none, m³/m³ |
+
+ERA5 fluxes are positive **downward**, so potential evaporation arrives negative and
+the sign is flipped. The raw value is kept as `pet_era5_raw_m` and the export asserts
+`pet_era5_mm > 0` on every row, so the convention is tested rather than assumed.
+
 ## 2. Resolution — what each column actually carries
 
 A 0.05° cell fed by 9 km ERA5-Land carries 9 km information. Recorded per column in

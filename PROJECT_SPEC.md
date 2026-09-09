@@ -23,7 +23,7 @@ Land-surface memory (soil moisture, vegetation) carries real information for rou
 *Fix:* the seasonal tier ingests **C3S multi-system seasonal forecast ensembles** (up to 6 months lead, hindcasts from 1993) as predictors. The ML layer does what ML is genuinely good at here: bias correction, spatial downscaling, and translating ensemble spread into calibrated probabilities. This mirrors how operational systems (JRC GDO, national services) actually work, and it is the difference between a toy and a defensible system.
 
 **Problem 3 — Spatial autocorrelation inflates every metric.**
-Pooling ~2,000 grid cells × ~300 months gives ~600,000 rows, but neighbouring cells during the same month are nearly identical. Effective sample size is closer to the number of months than the number of rows. Random or purely temporal splits therefore report metrics that will not reproduce operationally.
+Pooling 2,130 masked grid cells × 540 months gives **1,150,200 rows**, but neighbouring cells during the same month are nearly identical. Effective sample size is closer to the ~540 months than to the 1.15 million rows — a factor of roughly 2,000. Random or purely temporal splits therefore report metrics that will not reproduce operationally.
 
 *Fix:* evaluation is **blocked in time and reported per time step**. Metrics are aggregated across forecast dates, not across rows. A spatially blocked cross-validation variant is run as a robustness check.
 
@@ -66,10 +66,12 @@ A +6 month tier is explicitly **out of scope for v1**. It can be added only if T
 
 ### 2.2 Architecture
 
-The single most important architectural decision: **all raster reduction happens in Google Earth Engine; nothing downstream ever touches a raster.** GEE exports a tidy monthly panel (grid cell × month × variable) as Parquet/CSV. That table is small — roughly 2,000 cells × 300 months × ~20 variables — so the entire ML and serving stack operates on a file that fits comfortably in memory. This removes the need for a raster store, a tiling server, and most of the data engineering the original spec implied.
+The single most important architectural decision: **all raster reduction happens in Google Earth Engine; nothing downstream ever touches a raster.** GEE exports a tidy monthly panel (grid cell × month × variable) as Parquet/CSV.
+
+Measured, not estimated: the basin holds **2,395** CHIRPS 0.05° cells, **2,130** after the cropland/rangeland mask, over **540** months (1981–2025) — **1,150,200 rows**. At the ~35 columns the full panel carries, that is roughly **320 MB resident as float64**, about 160 MB as float32, and 60–90 MB on disk as compressed Parquet. Comfortably in memory on a laptop, but an order of magnitude above the "~50 MB" the draft asserted; the draft's figure came from assuming ~2,000 cells × 300 months. The conclusion survives — no raster store, no tiling server, no database in v1 — but the number is stated honestly.
 
 ```
-Google Earth Engine  ──► monthly panel (Parquet, ~50 MB)
+Google Earth Engine  ──► monthly panel (Parquet, ~60-90 MB, 1.15M rows)
    CHIRPS v3, ERA5-Land, MOD13, MOD16, MOD11,          │
    ESA WorldCover, SRTM                                 │
                                                         ▼
@@ -95,9 +97,25 @@ PostGIS is deferred to v2 and added only when there is a concrete need (multi-ba
 
 ### 2.3 Grid definition
 
-Analysis grid: 1 km, aligned to the MODIS sinusoidal grid to avoid resampling the highest-resolution input. All coarser inputs (CHIRPS ~5.5 km, ERA5-Land ~9 km, C3S ~1°) are bilinearly resampled onto it, with the resulting resolution mismatch documented — a 1 km map built from 9 km inputs must not be presented as 1 km information. Cells are masked to cropland and rangeland classes from ESA WorldCover; urban, water and bare rock are excluded.
+**The design rule, and it is not a Phase 0 expedient:**
 
-Basin boundary: official Konya Closed Basin boundary from DSİ if obtainable; HydroBASINS level 5 as documented fallback.
+> **Forecast at the resolution the physics supports. Observe at the resolution the sensor provides.**
+
+The draft resolved this the wrong way round. It set a 1 km analysis grid aligned to MODIS, then bilinearly resampled CHIRPS (5.5 km), ERA5-Land (9 km) and C3S (~1°) onto it — and admitted in the same paragraph that "a 1 km map built from 9 km inputs must not be presented as 1 km information." That is a rule the design itself made impossible to keep: once every forecast lives on a 1 km grid, every forecast map is a 1 km map. The resolution mismatch was documented in prose and then contradicted by the artefact.
+
+**Analysis grid: the CHIRPS 0.05° lattice itself.** Not a metric 5 km grid — CHIRPS's own lon/lat grid, `EPSG:4326`, `0.05°`, aligned to the collection's native transform. Reprojecting CHIRPS onto a metric grid would resample the one variable that must stay untouched, because SPI is computed from it and SPI is the primary target. Precipitation enters the panel having been resampled zero times.
+
+- **Every forecast, every baseline and every skill metric is produced on this grid**, Tier 1 and Tier 2 alike. There is no second forecast grid.
+- **ERA5-Land** (9 km) arrives bilinearly on the analysis grid and is recorded as carrying 9 km information regardless of cell size.
+- **C3S seasonal** (~1°) likewise, and it carries ~100 km information.
+- **MODIS NDVI and LST stay at native 1 km**, as *observation and monitoring layers only*. Before entering the model they are aggregated to the analysis grid as **mean and standard deviation** — the standard deviation is kept deliberately, because within-cell heterogeneity is itself a drought signal and a single mean discards it.
+- **GRACE** is a basin aggregate and nothing else; ~300 km native resolution covers the basin in one to two effective pixels.
+
+Every layer's true resolution is stated in the interface and in the model card. `config/data.yaml` `grid.resolution_mismatch` records, per column, what that column actually carries. This is what makes the honesty claim enforceable instead of decorative.
+
+Cells are masked to cropland and rangeland classes (ESA WorldCover 30 grassland, 40 cropland); urban, water and bare rock are excluded. A cell is kept when the majority of it — fraction ≥ 0.5 — is cropland or rangeland. Measured result: 2,395 cells in the basin, **2,130 after masking**. The mask uses a single 2021 WorldCover epoch applied across 1981–2025, so it reflects 2021 land use rather than land use contemporaneous with each row; that is a documented limitation, not a silent assumption.
+
+Basin boundary: official Konya Closed Basin boundary from DSİ if obtainable; HydroBASINS level 5 as documented fallback. Currently the fallback — `HYBAS_ID 2050085960`, the only `ENDO=2` (endorheic sink) polygon over the AOI, **58,374 km²**. The figure usually cited for the DSİ basin is ~50,000 km², a ~17% difference in delineation rather than rounding. Every basin-total figure in this project inherits that difference until the official boundary is obtained.
 
 ---
 
@@ -119,6 +137,21 @@ Every dataset below was checked for availability, licence and record length befo
 | Benchmark drought indicators | Copernicus GDO/EDO (SPI, CDI) via WCS | open, no registration | varies | Independent comparison |
 | Land cover | ESA WorldCover v200 (10 m) | GEE, free | 2020/2021 | Cropland masking |
 | Terrain | SRTM 30 m | GEE, free | static | Elevation, slope, aspect |
+
+**How each source reaches the analysis grid.** Per §2.3 the analysis grid is the CHIRPS 0.05° lattice. What that means per source, and what each column therefore actually carries:
+
+| Source | Native | On the analysis grid | Information content |
+|---|---|---|---|
+| CHIRPS v3 | 0.05° | **native, never resampled** | 0.05° — genuine |
+| ERA5-Land | ~9 km | bilinear | 9 km, in a 0.05° cell |
+| C3S seasonal | ~1° | bilinear | ~100 km, in a 0.05° cell |
+| MOD13A2 NDVI, MOD11A2 LST, MOD16A2GF ET | 1 km | aggregated to mean + standard deviation; **also served ungridded at 1 km as observation layers** | 1 km, preserved in both directions |
+| SMAP L4 | 9 km | validation only, not a panel column | 9 km |
+| GRACE MASCON_CRI | ~300 km | **basin aggregate only, never a cell column** | one to two effective pixels over the basin |
+| ESA WorldCover | 10 m | cropland fraction per cell, static 2021 epoch | mask only |
+| SRTM | 30 m | mean elevation, slope, aspect per cell | 30 m aggregated |
+
+The middle column is the design; the right column is what an honest legend has to say.
 
 ### 3.1 Access requirements — resolve these on day one
 
@@ -210,11 +243,13 @@ Robustness: spatially blocked CV as a secondary check; a permutation test on the
 
 ### 5.1 v1 scope (must ship)
 
-1. **Monitoring map** — current SPI-1/3/6, soil moisture anomaly, NDVI anomaly, ET/PET, per 1 km cell
-2. **Forecast map** — +1 month deterministic (Tier 1), +3 month probabilistic (Tier 2)
-3. **Skill map** — per-cell BSS/skill score, with a hard visual distinction for cells with no skill
-4. **Cell inspector** — click a cell: time series since 2001, current drivers via SHAP, forecast with confidence, and that cell's measured skill
-5. **Model card** — a page stating training period, baselines, measured skill, known limitations, and data provenance
+1. **Monitoring map (observation layers)** — current SPI-1/3/6 and soil moisture anomaly on the 0.05° analysis grid; NDVI anomaly, LST and ET/PET at their **native 1 km**, because these are observations and the sensor really does resolve them
+2. **Forecast map** — +1 month deterministic (Tier 1), +3 month probabilistic (Tier 2), both on the **0.05° analysis grid**. There is no 1 km forecast layer, and adding one would be a resolution claim the inputs cannot support
+3. **Skill map** — per-cell skill score / BSS on the analysis grid, with a hard visual distinction for cells with no skill
+4. **Cell inspector** — click a cell: time series since 1981 for precipitation-derived series and since 2001 for MODIS-derived ones, current drivers via SHAP, forecast with confidence, and that cell's measured skill
+5. **Model card** — a page stating training period, reference periods, baselines, measured skill, known limitations, and data provenance
+
+**Resolution labelling is a v1 requirement, not polish.** Every layer displays its true resolution and its source resolution — a 0.05° cell fed by 9 km ERA5-Land says so. Observation layers and forecast layers are visually distinguishable as such, so that a 1 km NDVI observation is never mistaken for a 1 km forecast. The model card repeats the same table.
 
 Item 5 is not documentation-as-afterthought; it is a deliverable and the thing that distinguishes this project.
 

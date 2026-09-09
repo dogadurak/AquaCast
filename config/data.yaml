@@ -1,21 +1,84 @@
 aoi:
   name: konya_closed_basin
-  bbox: [31.4, 36.7, 35.2, 39.4]      # W, S, E, N (EPSG:4326)
-  boundary_source: hydrobasins_l5      # replace with DSI boundary when obtained
+  bbox: [31.4, 36.7, 35.2, 39.4]      # W, S, E, N (EPSG:4326) - availability probing only
+  boundary_source: WWF/HydroSHEDS/v1/Basins/hybas_5
+  hybas_id: 2050085960                # the only ENDO=2 (endorheic sink) polygon over the AOI
+  area_km2: 58374
+  area_caveat: >
+    HydroBASINS level 5 delineates 58,374 km2. The figure usually cited for the
+    DSI Konya Closed Basin is ~50,000 km2 - a ~17% difference in delineation, not
+    a rounding difference. Replace with the official DSI boundary when obtainable
+    and re-run the export; until then this is a documented approximation and any
+    basin-total figure inherits it.
 
 grid:
-  resolution_m: 1000
-  crs: EPSG:4326
-  mask_landcover: [cropland, grassland]
+  # DESIGN RULE - forecast at the resolution the physics supports; observe at the
+  # resolution the sensor provides. See PROJECT_SPEC.md section 2.3.
+  #
+  # The modelling grid IS the CHIRPS grid: its own 0.05 degree lon/lat lattice, not
+  # a metric 5 km grid. Reprojecting onto a metric grid would resample the one
+  # variable that must stay untouched, because SPI is computed from it.
+  analysis:
+    name: chirps_native
+    crs: EPSG:4326
+    resolution_deg: 0.05
+    reference_collection: UCSB-CHC/CHIRPS/V3/PENTAD
+    nominal_scale_m: 5566             # informational only - never a reprojection target
+    cells_in_basin: 2395
+    cells_after_mask: 2130
+    months_1981_2025: 540
+    expected_rows: 1150200            # 2130 x 540 - asserted by the exporter
+
+  # Every forecast, every baseline and every skill metric is produced on the
+  # analysis grid, Tier 1 and Tier 2 alike. No exceptions.
+  forecast_grid: analysis
+
+  resampling:
+    precip_chirps: none               # native grid, untouched
+    era5_land: bilinear               # 9 km -> 0.05 deg
+    modis_1km: aggregate_mean_sd      # 1 km -> 0.05 deg, mean AND standard deviation
+
+  observation:
+    # Monitoring layers keep their native resolution and are never the forecast grid.
+    modis:
+      resolution_m: 1000
+      role: >
+        Monitoring and inspection only. Before entering the model these are
+        aggregated to the analysis grid as mean and standard deviation, so that
+        within-cell heterogeneity - itself a drought signal - is carried forward
+        rather than averaged away.
+
+  resolution_mismatch:
+    # A 0.05 deg cell fed by 9 km ERA5-Land carries 9 km information. Recorded here
+    # because it must be stated in the UI and the model card, not discovered later.
+    precip_chirps_mm: native 0.05 deg
+    precip_era5_mm: 9 km resampled to 0.05 deg
+    t2m_c: 9 km resampled to 0.05 deg
+    pet_mm: 9 km resampled to 0.05 deg
+    swvl1_4: 9 km resampled to 0.05 deg
+    ndvi_lst_et: 1 km aggregated to 0.05 deg
+
+  mask:
+    landcover_classes: [30, 40]       # ESA WorldCover: 30 grassland, 40 cropland
+    min_fraction: 0.5                 # keep cells that are majority cropland/rangeland
+    fraction_estimator: >
+      Cropland fraction is estimated from a regular 100 m subsample of the 10 m
+      WorldCover grid (~3,100 samples per 0.05 deg cell, standard error under 1%).
+      A full 10 m aggregation exceeds the interactive memory limit; the subsample
+      is an unbiased estimator of the same quantity.
+    static_epoch_caveat: >
+      WorldCover v200 is a single 2021 epoch applied as a static mask across
+      1981-2025. Cropland extent in the basin has changed over that period, so the
+      mask reflects 2021 land use, not the land use contemporaneous with each row.
 
 period:
   start: 2001-01-01
   end: 2025-12-31
-  # Index/anomaly fitting reaches further back than the panel itself - see
-  # climatology.baseline_precip_era5. Only precipitation and ERA5-Land are
-  # pulled for those extra years; the modelling panel still starts in 2001
-  # because MODIS does.
-  index_fit_start: 1981-01-01
+  # Index and anomaly fitting reaches further back than MODIS does - see
+  # climatology.baseline_precip_era5. CHIRPS and ERA5-Land are exported from 1981;
+  # MODIS-derived columns are null before 2001 and carry *_available flags.
+  export_start: 1981-01-01
+  export_end: 2025-12-31
 
 climatology:
   # TWO reference periods, because MODIS does not reach as far back as
@@ -62,9 +125,11 @@ climatology:
     end: 2016-12-31
     applies_to:
       - ndvi
+      - ndvi_sd
       - et_mm
       - pet_modis_mm
       - lst_day_c
+      - lst_day_c_sd
       - ndvi_anom
       - lst_anom
     note: >
@@ -81,7 +146,23 @@ sources:
   lst: MODIS/061/MOD11A2
   landcover: ESA/WorldCover/v200
   dem: USGS/SRTMGL1_003
+  terrestrial_water_storage: NASA/GRACE/MASS_GRIDS_V04/MASCON_CRI
+
+era5_bands:
+  # Exact band names verified against the collection, not assumed.
+  t2m_c: temperature_2m                       # K -> degC
+  precip_era5_mm: total_precipitation_sum     # m -> mm
+  pet_mm: potential_evaporation_sum           # m -> mm, sign flipped (ERA5 PET is negative)
+  swvl1: volumetric_soil_water_layer_1
+  swvl2: volumetric_soil_water_layer_2
+  swvl3: volumetric_soil_water_layer_3
+  swvl4: volumetric_soil_water_layer_4
 
 export:
-  chunk_by: year          # never export the whole record in one job
-  drive_folder: aquacast_exports
+  chunk_by: year                 # file granularity
+  request_by: month              # request granularity - 12 requests per file
+  method: compute_features       # direct paginated fetch; Drive export is the fallback
+  raw_dir: data/raw
+  max_retries: 5
+  backoff_base_seconds: 2
+  drive_folder: aquacast_exports # only used by the Drive fallback

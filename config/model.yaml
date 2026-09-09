@@ -1,0 +1,41 @@
+targets:
+  # (target, lead) pairs must not overlap their predictor window
+  - name: spi_1
+    lead_months: 1
+    tier: 1
+    kind: regression
+  - name: sm_anom
+    lead_months: 1
+    tier: 1
+    kind: regression
+  - name: spi_3
+    lead_months: 3
+    tier: 2
+    kind: classification      # P(SPI-3 < -1)
+    threshold: -1.0
+
+split:
+  train: [2001-01-01, 2016-12-31]
+  gap_1: [2017-01-01, 2017-12-31]     # gap >= longest accumulation window
+  validation: [2018-01-01, 2020-12-31]
+  gap_2: [2021-01-01, 2021-12-31]
+  test: [2022-01-01, 2025-12-31]
+
+baselines:
+  - climatology
+  - persistence
+  - known_accumulation      # the anti-leakage control - mandatory
+  - c3s_raw                 # tier 2 only
+
+model:
+  primary: xgboost
+  crosscheck: lightgbm
+  seed: 42
+
+evaluation:
+  aggregate: per_forecast_date     # never pool across all rows
+  report_by: [lead, landcover, cell]
+  metrics_regression: [mae, rmse, r2, skill_score]
+  metrics_probabilistic: [brier_skill_score, roc_auc, reliability]
+  spatial_blocked_cv: true
+  permutation_test: true

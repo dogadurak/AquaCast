@@ -1,0 +1,32 @@
+aoi:
+  name: konya_closed_basin
+  bbox: [31.4, 36.7, 35.2, 39.4]      # W, S, E, N (EPSG:4326)
+  boundary_source: hydrobasins_l5      # replace with DSI boundary when obtained
+
+grid:
+  resolution_m: 1000
+  crs: EPSG:4326
+  mask_landcover: [cropland, grassland]
+
+period:
+  start: 2001-01-01
+  end: 2025-12-31
+
+climatology:
+  baseline_start: 1991-01-01
+  baseline_end: 2020-12-31
+  # baseline statistics must be computed from TRAINING data only
+
+sources:
+  precipitation_primary: UCSB-CHC/CHIRPS/V3/PENTAD
+  reanalysis: ECMWF/ERA5_LAND/MONTHLY_AGGR
+  ndvi: MODIS/061/MOD13A2
+  ndvi_successor: NASA/VIIRS/002/VNP13A1
+  evapotranspiration: MODIS/061/MOD16A2GF
+  lst: MODIS/061/MOD11A2
+  landcover: ESA/WorldCover/v200
+  dem: USGS/SRTMGL1_003
+
+export:
+  chunk_by: year          # never export the whole record in one job
+  drive_folder: aquacast_exports

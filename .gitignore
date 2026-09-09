@@ -1,0 +1,18 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+.cdsapirc
+
+# data is reproducible - never commit it
+data/raw/*
+data/interim/*
+data/processed/*
+!data/**/.gitkeep
+
+# keep metrics and figures, they are the results
+!reports/**
+
+.ipynb_checkpoints/
+node_modules/
+.DS_Store

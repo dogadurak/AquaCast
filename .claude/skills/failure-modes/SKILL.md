@@ -461,6 +461,29 @@ would flip, not 0.065% of them.
   parameter so the refactor is value-identical — verified here by re-running T1 and
   getting 2,395 / 2,130 cells exactly, which kept 45 years of CHIRPS export valid.
 
+## 24. Sampling where full verification was cheap
+**Class:** silent corruption — the check exists but does not cover
+
+- **SYMPTOM:** A verification step that reads as thorough. "200 rows spot-checked
+  against source" sounds like evidence. Against 1,522,800 rows it is 0.013%, and it
+  catches only a *systematic* mispairing — a sparse one walks straight through.
+- **MECHANISM:** Sampling gets reached for by habit, from tasks where full checking
+  really is expensive. When it is not expensive, the sample buys nothing and costs
+  coverage. The T4 join is the case: verifying every value looked like work, so a
+  sample was proposed instead.
+- **DEFENCE:** Check whether full verification is actually cheap before sampling. For
+  a join it is: sort each source by its key, hash the value column, do the same on the
+  result, compare the digests. Equal digests mean **every** value is bound to the
+  right key — 100% coverage in seconds. It is also a *second independent route*: it
+  never performs a join, so it answers "is the result right" rather than "did the join
+  behave", which is the discipline that has caught real errors in T1, T2 and T3.
+- Keep a small **stratified** sample anyway — early/middle/late year, edge and
+  interior cell, first and last month, ring and analysis cell — but as human-readable
+  evidence in the report, never as the gate.
+
+> **Do not sample when full verification is cheap. Sampling is the answer to
+> expensive checking; where checking is cheap it is only lost coverage.**
+
 ---
 
 ## Adding an entry

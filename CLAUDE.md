@@ -49,6 +49,13 @@ Read `.claude/skills/failure-modes/SKILL.md` before any design decision, data st
 
 The canonical dataset is a single monthly panel. Every module reads and writes this schema; do not invent column names.
 
+**The contract is versioned by phase.** A column that is not in the current phase's
+list is not in the panel — the panel and this contract must never disagree, because a
+contract silently departed from stops being a contract. Moving a column between
+sections is a deliberate edit, made when the column actually lands.
+
+**Phase 0 — in `panel_monthly.parquet` now**
+
 ```
 data/processed/panel_monthly.parquet
 
@@ -56,27 +63,50 @@ cell_id            int64      stable ID from the CHIRPS 0.05° analysis grid,
                               derived from lon/lat indices so it is reproducible
 date               datetime   month start, UTC
 lon, lat           float64    cell centroid, EPSG:4326
+i, j               int64      CHIRPS lattice indices
+in_hydrobasins     bool       cell centre inside the HydroBASINS L5 polygon
+in_akarcay_lobe    bool       cell centre inside the Akarçay sub-basin
+crop_frac_2021     float64    cropland/rangeland fraction, 2021 WorldCover epoch
 precip_chirps_mm   float64    CHIRPS v3 monthly total
+n_pentads, n_obs   int64      pentads in the collection / contributing at this pixel
+precip_zero_isolated  bool    DERIVED at panel stage - artefact-like zero cluster
+t2m_c              float64    ERA5-Land monthly mean temperature (DAILY_AGGR)
+t2m_min_c, t2m_max_c  float64 mean of daily extremes (DAILY_AGGR, not MONTHLY_AGGR)
+dewpoint_c         float64    ERA5-Land mean daily dewpoint
 precip_era5_mm     float64    ERA5-Land monthly total
-t2m_c              float64    ERA5-Land 2 m mean temperature
-pet_mm             float64    ERA5-Land potential evapotranspiration
+pet_era5_mm        float64    ERA5-Land potential evaporation — PAN evaporation,
+                              a comparison column only, NOT the project's PET
+pet_era5_raw_mm    float64    unflipped value, so the sign convention stays auditable
 swvl1..swvl4       float64    ERA5-Land volumetric soil water, 4 layers
-ndvi               float64    MOD13A2 monthly composite, cell MEAN over the 0.05° cell
-ndvi_sd            float64    within-cell standard deviation of the 1 km NDVI pixels
+wind10m_ms, wind2m_ms  float64  mean of daily speeds; 2 m via the FAO-56 conversion
+srad_down_mj_m2_day, net_solar_mj_m2_day, net_thermal_mj_m2_day  float64
+surface_pressure_kpa  float64
+era5_native_cell_id  int64    which ERA5 0.1° pixel this cell draws from
+```
+
+**Phase 1 — not in the panel yet; do not emit these as empty columns**
+
+```
+ndvi, ndvi_sd      float64    MOD13A2 monthly composite, cell mean and within-cell sd
 ndvi_source        category   "MODIS" | "VIIRS"
 ndvi_available     bool       false before 2001 — MODIS record does not reach back
-et_mm, pet_modis_mm float64   MOD16A2GF, cell mean
-et_mm_sd           float64    within-cell standard deviation
-et_available       bool       false before 2001
-lst_day_c          float64    MOD11A2 daytime LST, cell mean
-lst_day_c_sd       float64    within-cell standard deviation
-lst_available      bool       false before 2001
-spi_1, spi_3, spi_6, spi_12   float64   computed, train-period gamma fit
-spei_3, spei_6     float64
-sm_anom                       float64   vs baseline_precip_era5 (1981–2016)
-ndvi_anom, lst_anom           float64   vs baseline_modis (2001–2016)
+et_mm, et_mm_sd, pet_modis_mm  float64   MOD16A2GF, cell mean and sd
+et_available       bool
+lst_day_c, lst_day_c_sd  float64   MOD11A2 daytime LST, cell mean and sd
+lst_available      bool
 elevation_m, slope_deg, aspect_deg  float64   static
 landcover          category   ESA WorldCover class
+```
+
+**Phase 2 — computed from the panel, not exported into it by T4**
+
+```
+spi_1, spi_3, spi_6, spi_12   float64   train-period gamma fit
+spei_3, spei_6     float64    FAO-56 Penman-Monteith ET₀, not ERA5 pev
+pet_fao56_mm       float64    clamped at zero, with pet_fao56_clamped flag
+sm_anom            float64    vs baseline_precip_era5 (1981–2016), depth-weighted
+                              0.07·swvl1 + 0.21·swvl2 + 0.72·swvl3 — plain mean forbidden
+ndvi_anom, lst_anom  float64  vs baseline_modis (2001–2016)
 ```
 
 Rules: one row per (`cell_id`, `date`); no forward-filling across more than one month without an explicit `*_filled` flag column; all units in column names; no silent unit conversion.

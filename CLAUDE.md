@@ -102,6 +102,13 @@ landcover          category   ESA WorldCover class
 
 ```
 spi_1, spi_3, spi_6, spi_12   float64   train-period gamma fit
+spi1_mm_per_unit   float64    measured sensitivity: mm needed to move SPI-1 by one
+                              unit at this (cell, calendar month), from the same
+                              reference-period fit. Not a threshold — reliability is
+                              reported binned by this column, never gated by a cut
+                              point frozen into the panel. See config/model.yaml
+                              spi_reliability and reports/spi_reliability_note.md.
+spi3_mm_per_unit   float64    same, for SPI-3
 spei_3, spei_6     float64    FAO-56 Penman-Monteith ET₀, not ERA5 pev
 pet_fao56_mm       float64    clamped at zero, with pet_fao56_clamped flag
 sm_anom            float64    vs baseline_precip_era5 (1981–2016), depth-weighted

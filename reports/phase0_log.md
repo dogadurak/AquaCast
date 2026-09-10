@@ -209,3 +209,30 @@ acik varsayim: yok - T4'un tum acik maddeleri (tarih/hucre kume esitligi,
   outer join, provenans kod agaci) bu kosuda kapatildi.
 sonraki: T5 (SPI hesaplama) - hedef tanimi onceki oturumda karara baglandi:
   SPI-3 birincil, SPI-1 ikincil+takvim-ayi-bazinda. Kapsam BUYUMEYECEK.
+
+## T5 on-kontrol - "1991-2020" iddiasi dogrulanamadi
+durum: DUZELTME GEREKMEDI (iddia yanlisti, kontrol edildi, kayitli)
+Kullanici T5'in PLAN'ini onaylarken CLAUDE.md ve PROJECT_SPEC.md'de hala
+"1991-2020" gectigini ve bunun train/test split'iyle (2001-2016) ve MODIS'in
+2000 baslangiciyla celistigini iddia etti; tek 1981-2016 penceresi onerdi.
+
+grep ile dogrulandi: "1991-2020" hicbir dosyada YOK. Bulunan tek eslesmeler o
+donemi REDDEDEN gecmis-zaman ifadeleri ("supersedes", "corrects the draft
+spec", "cannot be used here") - duzeltme onceki bir turda zaten yapilmisti
+(commit d4936de, "fix: replace unusable 1991-2020 reference period...").
+
+Onerilen TEK pencere de (1981-2016, her sey icin) kullanicinin kendi daha once
+belirttigi sorunu yeniden uretirdi: ndvi_anom icin fiziksel olarak imkansiz,
+MODIS 2000'den once yok. Mevcut tasarim zaten IKI ayri pencere kullaniyor:
+  baseline_precip_era5 (1981-2016) -> SPI, sm_anom, ERA5 turevleri
+  baseline_modis       (2001-2016) -> ndvi_anom, lst_anom
+Ikisi de train donemini asmiyor, ikisi de validation/test'e sizmiyor.
+
+Aksiyon: dosyalarda degisiklik yok (zaten dogru). CLAUDE.md'ye eksik olan iki
+kontrat satiri eklendi: spi1_mm_per_unit, spi3_mm_per_unit (MODIS'in "Faz 1"
+desenindeki gibi - tasarim karari olarak kayitli, henuz uretilmedi).
+Bu vakayi kaydetme sebebi: iddia gecerli olsaydi spec'i etrafindan dolanmadan
+duzeltecektim (CLAUDE.md working style kurali); gecerli olmadigi icin de ayni
+titizlikle KONTROL EDILDIGI ve NEDEN aksiyon alinmadigi kayit altina alinmali -
+sessizce atlanan bir talep, kontrolun hic yapilmadigi izlenimini verir.
+sonraki: T5 - src/features/spi.py

@@ -441,7 +441,7 @@ def export_year(
         "wind_note": WIND_SCALAR_BIAS_NOTE,
         "pet_nonpositive_rows": nonpositive,
         "pet_min_mm": worst,
-        "provenance": provenance(),
+        "provenance": provenance(["src/data/export_era5.py", "src/data/grid.py", "src/data/gee_io.py", "config/data.yaml"]),
         "schema_fingerprint": schema_fingerprint(EXPECTED_SCHEMA),
         "schema_columns": EXPECTED_SCHEMA,
         "resampling": "bilinear",

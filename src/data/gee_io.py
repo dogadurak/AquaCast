@@ -257,15 +257,47 @@ def reduce_to_grid(
     )
 
 
-def provenance() -> dict[str, Any]:
+def _digest_files(paths: list[Path]) -> str:
+    """Content hash of specific files as they exist in the WORKING TREE.
+
+    A commit SHA does not identify running code when the tree is dirty, and neither
+    does `HEAD:src` - it names what was committed, not what executed. Hashing the
+    files themselves leaves an artefact identifiable even when it should not have
+    been produced in the first place.
+    """
+    import hashlib
+
+    h = hashlib.sha256()
+    for path in sorted(paths):
+        if not path.is_file():
+            continue
+        h.update(str(path.relative_to(ROOT)).replace("\\", "/").encode("utf-8"))
+        h.update(path.read_bytes())
+    return h.hexdigest()[:16]
+
+
+def provenance(producers: list[str] | None = None) -> dict[str, Any]:
     """Which code produced this artefact.
 
     A schema fingerprint is NOT a provenance check. Changing ERA5's temperature
     source from MONTHLY_AGGR to DAILY_AGGR changed the VALUES by up to 6 C while
     leaving the columns identical - a file written before that fix has the right
-    schema and 61% inflated Tmax/Tmin, and no column check can see it. Every
-    artefact records the commit that produced it, and the panel build asserts that
-    all inputs came from one.
+    schema and 61% inflated Tmax/Tmin, and no column check can see it.
+
+    Three identities are recorded, because none alone is sufficient:
+
+    - `git_sha` places the run in history, but a documentation commit changes it
+      while the producing code is untouched. Measured: the 45 ERA5 manifests carry
+      two SHAs whose diff touches only skills, docs and a reporting script.
+    - `code_tree` (HEAD:src, HEAD:config) is the committed content, which fixes that
+      - but it is a lie when the tree is dirty.
+    - `producer_digest` hashes the specific modules that produce THIS artefact, as
+      they exist on disk. It is the one that survives a dirty tree.
+
+    `producers` scopes the digest to the modules that matter. Requiring CHIRPS and
+    ERA5 to share one hash would be wrong: they are different exporters, and touching
+    either would change a whole-tree hash for both. The invariant that means something
+    is that every year of ONE source came from ONE producing code state.
     """
     import subprocess
 
@@ -280,20 +312,17 @@ def provenance() -> dict[str, Any]:
 
     sha = _git("rev-parse", "HEAD")
     dirty = _git("status", "--porcelain")
-    # The commit SHA is too strict an identity for "same code": a documentation
-    # commit mid-export changes it while the producing code is untouched. Measured
-    # here - the 45 ERA5 manifests carry two SHAs whose diff touches only skills,
-    # docs and a reporting script, with src/ and config/ byte-identical.
-    #
-    # So record the CONTENT hash of the directories that actually produce data.
-    # Git's tree objects are exactly that: HEAD:src changes only when something
-    # under src/ changes. Compare these, not the commit.
     code = {name: _git("rev-parse", f"HEAD:{name}") for name in ("src", "config")}
+
+    producers = producers or []
+    files = [ROOT / rel for rel in producers]
     return {
         "git_sha": sha,
         "git_dirty": bool(dirty),
         "git_dirty_files": (dirty.splitlines() if dirty else []),
         "code_tree": code,
+        "producers": producers,
+        "producer_digest": _digest_files(files) if files else None,
     }
 
 

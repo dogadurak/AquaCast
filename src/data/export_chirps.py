@@ -339,7 +339,7 @@ def export_year(
             "isolated_zero_cells": isolated_total,
         },
         "n_obs_per_pixel": PENTADS_PER_MONTH,
-        "provenance": provenance(),
+        "provenance": provenance(["src/data/export_chirps.py", "src/data/grid.py", "src/data/gee_io.py", "config/data.yaml"]),
         "schema_fingerprint": schema_fingerprint(EXPECTED_SCHEMA),
         "schema_columns": EXPECTED_SCHEMA,
         "basin_mean_annual_mm": basin_mean_annual,

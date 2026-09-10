@@ -1,7 +1,7 @@
 {
-  "generated_utc": "2026-09-10T11:09:11+00:00",
+  "generated_utc": "2026-09-10T14:30:58+00:00",
   "official_annual_mm": 417.0,
-  "official_source": "T.C. Tar\u0131m ve Orman Bakanl\u0131\u011f\u0131, Su Y\u00f6netimi Genel M\u00fcd\u00fcrl\u00fc\u011f\u00fc - Konya Havzas\u0131 Tan\u0131t\u0131m (417 mm, 4,980,534 ha)",
+  "official_source": "T.C. Tar\u0131m ve Orman Bakanl\u0131\u011f\u0131, Su Y\u00f6netimi Genel M\u00fcd\u00fcrl\u00fc\u011f\u00fc, Konya Havzas\u0131 Tan\u0131t\u0131m: \"Toplam ya\u011f\u0131\u015f alan\u0131 56.554 km2 olan Konya Kapal\u0131 Havzas\u0131'n\u0131n y\u0131ll\u0131k ortalama ya\u011f\u0131\u015f y\u00fcksekli\u011fi 417 mm; y\u0131ll\u0131k ortalama ak\u0131\u015f\u0131 ise 191,53 m3/s'dir.\" The same report gives the surface area as 4,980,534 ha = 49,805 km2. No reference period is stated.",
   "years_exported": [
     1981,
     2025
@@ -12,7 +12,7 @@
     "in_hydrobasins": {
       "cells": 2395,
       "mean_annual_mm": 463.1903494737736,
-      "bias_fraction": 0.11076822415773058,
+      "ratio_to_official": 0.11076822415773058,
       "annual_mm": {
         "1981": 595.8595217548077,
         "1982": 390.4307871850228,
@@ -64,7 +64,7 @@
     "in_hydrobasins_masked": {
       "cells": 2130,
       "mean_annual_mm": 456.62445186728144,
-      "bias_fraction": 0.09502266634839662,
+      "ratio_to_official": 0.09502266634839662,
       "annual_mm": {
         "1981": 579.4998767014894,
         "1982": 384.8199492072867,
@@ -116,7 +116,7 @@
     "excl_akarcay_masked": {
       "cells": 1823,
       "mean_annual_mm": 449.1769988315734,
-      "bias_fraction": 0.07716306674238238,
+      "ratio_to_official": 0.07716306674238238,
       "annual_mm": {
         "1981": 583.1203865194597,
         "1982": 368.6266295294045,
@@ -167,6 +167,13 @@
     }
   },
   "population_spread_mm": 14.01335064220018,
-  "open_assumption_reference_period": "The reference period behind the official 417 mm has not been established. Ours is 1981-2025. If the official figure is an older normal, some of the difference reported here is a period effect rather than product bias.",
-  "interpretation": "CHIRPS is designed for data-sparse tropical regions and has a documented positive bias over T\u00fcrkiye, strongest for low precipitation amounts. This is that bias measured for the Konya basin on the exported panel. It is a result to report, not a gate: the model is trained on CHIRPS throughout, so a constant multiplicative bias is absorbed by the standardisation that produces SPI. What it does affect is any statement in absolute mm."
+  "official_precipitation_area_km2": 56554.0,
+  "official_surface_area_km2": 49805.0,
+  "is_bias_measurement": false,
+  "comparison_axes": {
+    "population": "FAILS. 417 mm is the mean over a 56,554 km2 precipitation area; the same report's surface area is 49,805 km2, 13.6% apart. The anchor's own population uncertainty matches the size of the difference measured against it, with unknown sign.",
+    "quantity": "HOLDS. Both sides are precipitation.",
+    "scale": "FAILS. No reference period is stated anywhere in the report - no year range, no 'long-term average', no attribution to DSI or MGM. Ours is 1981-2025."
+  },
+  "interpretation": "CONTEXT, not validation, and not a bias. Two of the three comparison axes are unresolved, so this ratio cannot be attributed to product error. It is reported because it tells a reader roughly where CHIRPS sits relative to the published basin figure, and because the spread across cell populations shows how much the unresolved boundary moves it. The precipitation validation PROJECT_SPEC 3.2 asks for belongs on MGM station records, where point, period and quantity can all be matched - the same station set already required for the point-based ERA5 temperature check."
 }

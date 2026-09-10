@@ -280,10 +280,20 @@ def provenance() -> dict[str, Any]:
 
     sha = _git("rev-parse", "HEAD")
     dirty = _git("status", "--porcelain")
+    # The commit SHA is too strict an identity for "same code": a documentation
+    # commit mid-export changes it while the producing code is untouched. Measured
+    # here - the 45 ERA5 manifests carry two SHAs whose diff touches only skills,
+    # docs and a reporting script, with src/ and config/ byte-identical.
+    #
+    # So record the CONTENT hash of the directories that actually produce data.
+    # Git's tree objects are exactly that: HEAD:src changes only when something
+    # under src/ changes. Compare these, not the commit.
+    code = {name: _git("rev-parse", f"HEAD:{name}") for name in ("src", "config")}
     return {
         "git_sha": sha,
         "git_dirty": bool(dirty),
         "git_dirty_files": (dirty.splitlines() if dirty else []),
+        "code_tree": code,
     }
 
 

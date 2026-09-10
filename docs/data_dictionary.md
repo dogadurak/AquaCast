@@ -156,18 +156,39 @@ and that offset would look exactly like a climate signal.
   Each year file carries a manifest with `fetched_utc` so a later divergence is
   attributable rather than mysterious.
 
-**Bias against the official climatology — the first number of the CHIRPS comparison.**
+**CHIRPS against the official figure — CONTEXT, not a bias measurement.**
 
 | Quantity | Value |
 |---|---|
-| CHIRPS v3 basin-mean annual total, 1981–2025 | **463.1 mm** |
-| Published basin-mean annual total (SYGM, Konya Havzası Tanıtım) | **417 mm** |
-| CHIRPS bias | **+11.1%** |
+| CHIRPS v3 basin-mean annual total, 1981–2025 (masked, Akarçay excluded) | 449.2 mm |
+| …all `in_hydrobasins` cells | 463.2 mm |
+| Published figure (SYGM, Konya Havzası Tanıtım) | 417 mm |
+| Ratio | +7.7% to +11.1% depending on cell population |
 
-The same ministry report gives the basin area as 4,980,534 ha = 49,805 km², matching
-the official area in §1.3 — so both figures describe the same delineation. A positive
-bias is the documented behaviour of CHIRPS over Türkiye, and this is its magnitude for
-this basin. It is a result, not only an assertion.
+**This is not CHIRPS's bias, and an earlier version of this section wrongly said it
+was.** The claim that both figures describe one delineation is false. The report's own
+sentence reads:
+
+> "Toplam **yağış alanı 56.554 km²** olan Konya Kapalı Havzası'nın yıllık ortalama
+> yağış yüksekliği **417 mm**…"
+
+so the 417 mm is a mean over a **56,554 km² precipitation area**, while the surface
+area in the same document is 49,805 km² — 13.6% apart, and 56,554 sits nearer
+HydroBASINS' 58,374 than the 50,278 it was being compared against. The report states
+**no reference period** at all: no year range, no "long-term average", no attribution
+to DSİ or MGM.
+
+Two of the three comparison axes therefore fail — population and scale — and the
+anchor's own uncertainty is the same size as the difference being measured, with
+unknown sign. The figure is retained because it tells a reader roughly where CHIRPS
+sits, and because the 14 mm spread across populations shows how much the unresolved
+boundary moves it. Nothing here may be reported as bias.
+
+**The precipitation validation PROJECT_SPEC §3.2 asks for belongs on MGM station
+records**, where all three axes can be controlled: same point (the station-to-cell
+mapping in `reports/station_cells.json`), same period (restrict CHIRPS to the
+station's normal period), same quantity. That is the same station set already needed
+for the point-based ERA5 temperature check — one dataset, two validations.
 
 **What an exact zero means.** CHIRPS overestimates low precipitation amounts, so the
 climatological dry season rarely reaches exact zero: in July 1990 — the driest month

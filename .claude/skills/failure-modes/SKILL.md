@@ -50,6 +50,33 @@ Corollary for reporting: when (b) does not match, do not call the difference a b
 Call it what it is — the ratio of two different definitions — and state both
 definitions beside it.
 
+### An anchor number carries its own population and scale
+
+Axis (c) of the CHIRPS figure was found by applying this rule. Axis (a) was not — it
+only became visible on reading the **sentence** the number appears in:
+
+> "Toplam yağış alanı **56.554 km²** olan Konya Kapalı Havzası'nın yıllık ortalama
+> yağış yüksekliği **417 mm**…"
+
+The 417 mm belongs to a **56,554 km² precipitation area**, while the same report's
+surface area is 49,805 km² — a 13.6% difference between two figures in one document,
+and 56,554 sits closer to HydroBASINS' 58,374 than to the 50,278 the figure was being
+compared against. The number had been taken from a search-result summary, never from
+its own sentence, so its population was assumed rather than read.
+
+The consequence is fatal to the comparison: the anchor's own population uncertainty
+is the same order as the 7.7–11% "bias" measured against it, and its direction is
+unknown — if the extra area is wetter, 417 is pulled up; if drier, down.
+
+> **Do not record a reference number. Record the sentence it appears in — area,
+> period, source, definition. A figure lifted out of its context cannot be checked on
+> any of the three axes, and its uncertainty is invisible.**
+
+When two of three axes are unresolved, the anchor cannot measure anything. Demote it
+to **context** and find a reference that *can* be matched on all three — here, station
+records: same point (station-to-cell mapping), same period (restrict the product to
+the station's normal period), same quantity.
+
 ---
 
 ## 1. SPI accumulation window overlaps the forecast lead

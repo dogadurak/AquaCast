@@ -141,7 +141,12 @@ sonraki: export bitince T3 kapanacak, sonra T4 (panel birlestirme)
 ## ACIK ISLER - kapanmadan gecilmeyecek
 
 ### T3 kapanisinda
-- [ ] PET esiklerini SIKLASTIR. Su an PROVISIONAL: PET_POSITIVE_MIN_SHARE=0.98,
+- [x] PET esikleri SIKLASTIRILDI. 45 yilin dagilimi: non-pozitif maks 118/33840
+      (%0.349, 2017), en negatif -1.012 mm. Esikler olculen ucun ~3 katina cekildi:
+      share >= 0.989, min >= -3.0 (onceki provisional: 0.98 ve -5.0).
+- [x] ERA5 vs CHIRPS korelasyonu: 45 yil, r = 0.809 (esik 0.70).
+      ERA5 421 mm vs CHIRPS 463 mm.
+- [ ] (eski madde) PET esiklerini SIKLASTIR. Su an PROVISIONAL: PET_POSITIVE_MIN_SHARE=0.98,
       PET_MIN_PLAUSIBLE_MM=-5.0. Olculen (tek yil, 1983): %0.065 non-pozitif,
       minimum -0.53 mm. Yani esikler 30x ve 10x gevsek - T2'deki "max<1000mm"
       ile ayni sinif, gercekci hicbir hatayi yakalamaz. Export bitince 45 yilin
@@ -176,3 +181,29 @@ sonraki: export bitince T3 kapanacak, sonra T4 (panel birlestirme)
       Net radyasyon negatif ve VPD kucukken PM hafif negatif cikabilir.
 - [ ] Kok bolgesi toprak nemi DERINLIK AGIRLIKLI: 0.07*swvl1 + 0.21*swvl2 +
       0.72*swvl3. Duz ortalama YASAK (7 cm deri katmanini 10 kat fazla agirliklar).
+
+## T3 - ERA5-Land export (tamamlandi)
+durum: OK
+artefakt: data/raw/era5/era5_1981..2025.csv (45 dosya + 45 manifest)
+assert: hepsi gecti.
+  - yil dosyasi 45/45, toplam satir beklenen 1.522.800 -> gercek 1.522.800
+  - farkli deger orani (bilinear vs nearest): beklenen >=0.90 -> gercek 1.000
+    (nearest ~0.25 verirdi)
+  - ERA5 vs CHIRPS yillik korelasyon, 45 yil: beklenen >=0.70 -> gercek 0.809
+  - fiziksel invariantlar (tmin<=t2m<=tmax, dewpoint<=t2m): 0 ihlal
+  - su maskesi: 0 nodata hucre, 45 yilda ayni kume
+  - ERA5 yerli piksel 756, 2820 hucre icin ~3.7 hucre/piksel
+sure: ~4.5 sa
+surpriz: PROVENANS MEKANIZMASI ILK ISINDE ATESLEDI. 45 manifest IKI farkli git
+  SHA tasiyor - export sururken commit attim. Ama kod agaci hash'i TEK: iki SHA
+  arasindaki diff yalnizca skill/docs/raporlama script'ine dokunuyor, src/ ve
+  config/ birebir ayni. Yani veri tutarli ve bunu hafizadan degil diff'ten
+  biliyorum. Ders: T4 assert'i ham SHA degil KOD AGACI hash'i karsilastirmali,
+  yoksa dokuman commit'inde yanlis alarm verir. provenance() artik HEAD:src ve
+  HEAD:config tree hash'lerini de kaydediyor.
+  Ikinci: CHIRPS'in 45 dosyasinda hic provenans yok (o export provenans
+  eklenmeden once kosstu). Geriye donuk damgalanamaz. Yerine TEKRAR
+  URETILEBILIRLIK kanitlandi: 1985-03, 1992-10, 2020-07 yeniden cekildi, diskteki
+  degerlerle maks fark 2.8e-14 (CSV metin round-trip gurultusu). Erken/orta/gec
+  partilerin hepsi ayni kodla uretilmis.
+sonraki: T4 (panel birlestirme)

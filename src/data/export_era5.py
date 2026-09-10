@@ -105,16 +105,14 @@ BASIN_MEAN_T2M_PLAUSIBLE_C = (8.0, 14.0)
 # a factor of ~30), and it is also a reportable finding.
 # Potential evaporation is positive almost everywhere almost always, but not
 # strictly: see the sign-convention check in export_year.
-# PROVISIONAL - both are placeholders, not measurements.
-# Observed so far, from ONE year (1983): 0.065% non-positive, minimum -0.53 mm.
-# These bounds are 30x and 10x looser than that, which is the same mistake as the
-# 1000 mm ceiling in T2: loose enough to pass any realistic error. They are set
-# wide on purpose because one year is not the distribution - a colder year could
-# bring December and February in too. TIGHTEN THEM at the close of T3, from the
-# 45-year distribution recorded in the manifests (pet_nonpositive_rows,
-# pet_min_mm), to roughly 3x the observed maximum.
-PET_POSITIVE_MIN_SHARE = 0.98
-PET_MIN_PLAUSIBLE_MM = -5.0
+# Measured over all 45 years, not guessed. Non-positive rows peak at 118 of 33,840
+# (0.349%, in 2017) and the most negative value anywhere is -1.012 mm. Both bounds
+# are set at roughly three times the observed extreme - loose enough not to fire on
+# a colder-than-observed year, tight enough that a real problem cannot hide behind
+# them. The earlier provisional values (2% and -5.0) were 6x and 5x looser still,
+# which is the mistake failure-modes 15 describes.
+PET_POSITIVE_MIN_SHARE = 0.989
+PET_MIN_PLAUSIBLE_MM = -3.0
 
 MAX_PRECIP_DIVERGENCE = 0.35
 MIN_PRECIP_CORRELATION = 0.70

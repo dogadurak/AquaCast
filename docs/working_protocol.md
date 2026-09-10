@@ -42,6 +42,18 @@ sonraki: T4
 If the output of a past task is changed later, add a `REVİZE:` line to that task's
 log entry. Never correct it silently.
 
+## Scope discipline
+
+An interesting finding is not automatically a task. During Phase 0, anything that does
+not change the skill table goes on the model-card list and the work continues. The
+gate is one question - does the model beat climatology, persistence and the
+known-accumulation baseline - and everything the answer does not depend on can wait
+until after it exists.
+
+This is not an argument against rigour; every diagnostic run so far found something
+real. It is a guard against rigour turning into a way of deferring the result, which
+is a failure mode this project is specifically prone to.
+
 ## Stop conditions — stop writing code and come back to the user
 
 - An assertion failed.

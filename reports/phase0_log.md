@@ -138,72 +138,42 @@ acik varsayim: istasyon koordinatlari benim tahminim, MGM'nin resmi degerleri
   km'lik duzeltme komsu hucreye tasiyabilir. Normaller gelince yeniden hesaplanacak.
 sonraki: export bitince T3 kapanacak, sonra T4 (panel birlestirme)
 
-## ACIK ISLER - kapanmadan gecilmeyecek
+## ACIK ISLER - iki kategori, karistirilmayacak
 
-### T3 kapanisinda
-- [x] PET esikleri SIKLASTIRILDI. 45 yilin dagilimi: non-pozitif maks 118/33840
-      (%0.349, 2017), en negatif -1.012 mm. Esikler olculen ucun ~3 katina cekildi:
-      share >= 0.989, min >= -3.0 (onceki provisional: 0.98 ve -5.0).
-- [x] ERA5 vs CHIRPS korelasyonu: 45 yil, r = 0.809 (esik 0.70).
-      ERA5 421 mm vs CHIRPS 463 mm.
-- [ ] (eski madde) PET esiklerini SIKLASTIR. Su an PROVISIONAL: PET_POSITIVE_MIN_SHARE=0.98,
-      PET_MIN_PLAUSIBLE_MM=-5.0. Olculen (tek yil, 1983): %0.065 non-pozitif,
-      minimum -0.53 mm. Yani esikler 30x ve 10x gevsek - T2'deki "max<1000mm"
-      ile ayni sinif, gercekci hicbir hatayi yakalamaz. Export bitince 45 yilin
-      manifest'lerindeki pet_nonpositive_rows / pet_min_mm dagilimina bak,
-      esigi olculen maksimumun ~3 katina cek.
-- [ ] ERA5 vs CHIRPS yillik korelasyonu (>=5 esli yil gerekiyordu, artik 45 var).
-- [ ] Istasyon normalleri gelince nokta bazli ERA5 dogrulamasi; koordinatlar
-      guncellenince scripts/station_cells.py yeniden calistirilacak
-      (Karaman 2.12 km, Beysehir 2.02 km hucre sinirina yakin).
+FAZ 0'IN KAPISI TEK BIR SORU: model climatology'yi, persistence'i ve
+known-accumulation baseline'ini yeniyor mu, ne kadar? O karsilastirma tamamen
+IC - model de baseline'lar da ayni paneli kullaniyor. Dis referanslarin hicbiri
+skill tablosunu degistirmez.
 
-### T4'te
-- [ ] TARIH ANAHTARI HIZASI. CHIRPS ve ERA5 dosyalarinda ay ayni sekilde mi
-      temsil ediliyor? Ikisi de ayin ilk gunu mu, saat dilimi var mi? Farkliysa
-      join ya null uretir ya satir cogaltir - ikisi de sessiz. Iki tarafi
-      normalize et ve join ONCESI iki tarafin tarih KUMELERININ birebir ayni
-      oldugunu assert et (set esitligi, sayi esitligi degil).
-- [ ] JOIN TURU. Inner join KULLANMA. Outer join yap, sonra
-      set(CHIRPS.cell_id) == set(ERA5.cell_id) oldugunu AYRICA assert et.
-      Inner join bir tarafta eksik hucre varsa sessizce duser ve satir sayisi
-      makul kalir. ERA5'te su maskesi 0 cikti ama bunu VARSAYMA, olc.
-- [ ] Join sonrasi satir sayisi: beklenen 2820 x 540 = 1.522.800. Ne eksik ne
-      fazla; fazla olmasi tarih/hucre anahtarinda cogaltma demektir.
-- [ ] PROVENANS ASSERT'I: tum yil dosyalari AYNI git SHA ile uretilmis olmali,
-      ve hicbiri git_dirty=true olmamali. Farkliysa DUR. Sema kontrolu bunu
-      goremez - ERA5 sicaklik kaynagi degisimi semayi degil DEGERLERI degistirdi.
-- [ ] precip_zero_isolated bayragi panelde turetilecek (ham export'a konmadi;
-      diskteki CSV'lerden hesaplanabilir, yeniden cekme gerektirmez).
-- [ ] MODIS kolonlari 1981-2000 icin null + *_available=false; satirlar ATILMAYACAK.
+### A - FAZ 0 KAPISINI BLOKLAYAN (hicbiri dis veri gerektirmiyor)
+- [ ] T4 panel birlestirme (kod hazir, CHIRPS yeniden cekimini bekliyor)
+- [ ] T5 SPI-1 ve SPI-3 + climate_indices dogrulamasi
+- [ ] T6 dort baseline (model YAZMADAN ONCE)
+- [ ] T7 XGBoost: SPI-3 @ +3 ay (birincil), SPI-1 @ +1 ay (ikincil)
+- [ ] T8 skill tablosu + /leakage-audit + /phase-gate
 
-### T5'te
-- [ ] FAO-56 ET0 sifirda kirpilacak, *_clamped bayragi ile, ham deger saklanacak.
-      Net radyasyon negatif ve VPD kucukken PM hafif negatif cikabilir.
-- [ ] Kok bolgesi toprak nemi DERINLIK AGIRLIKLI: 0.07*swvl1 + 0.21*swvl2 +
-      0.72*swvl3. Duz ortalama YASAK (7 cm deri katmanini 10 kat fazla agirliklar).
+KAPSAM TAAHHUDU: T5-T8 arasinda kapsam BUYUTULMEYECEK. Bulunan her ilginc sey
+otomatik olarak bir gorev degildir - B'ye yazilir ve devam edilir. Skill tablosu
+ciktiktan sonra model card istenildigi kadar zenginlestirilir. Bu projenin
+gecmisindeki tekrar eden hata tema degistirmek degil, sonuca varmadan
+derinlesmek; titizlik sonucu erteleyen bir forma burunebilir.
 
-## T3 - ERA5-Land export (tamamlandi)
-durum: OK
-artefakt: data/raw/era5/era5_1981..2025.csv (45 dosya + 45 manifest)
-assert: hepsi gecti.
-  - yil dosyasi 45/45, toplam satir beklenen 1.522.800 -> gercek 1.522.800
-  - farkli deger orani (bilinear vs nearest): beklenen >=0.90 -> gercek 1.000
-    (nearest ~0.25 verirdi)
-  - ERA5 vs CHIRPS yillik korelasyon, 45 yil: beklenen >=0.70 -> gercek 0.809
-  - fiziksel invariantlar (tmin<=t2m<=tmax, dewpoint<=t2m): 0 ihlal
-  - su maskesi: 0 nodata hucre, 45 yilda ayni kume
-  - ERA5 yerli piksel 756, 2820 hucre icin ~3.7 hucre/piksel
-sure: ~4.5 sa
-surpriz: PROVENANS MEKANIZMASI ILK ISINDE ATESLEDI. 45 manifest IKI farkli git
-  SHA tasiyor - export sururken commit attim. Ama kod agaci hash'i TEK: iki SHA
-  arasindaki diff yalnizca skill/docs/raporlama script'ine dokunuyor, src/ ve
-  config/ birebir ayni. Yani veri tutarli ve bunu hafizadan degil diff'ten
-  biliyorum. Ders: T4 assert'i ham SHA degil KOD AGACI hash'i karsilastirmali,
-  yoksa dokuman commit'inde yanlis alarm verir. provenance() artik HEAD:src ve
-  HEAD:config tree hash'lerini de kaydediyor.
-  Ikinci: CHIRPS'in 45 dosyasinda hic provenans yok (o export provenans
-  eklenmeden once kosstu). Geriye donuk damgalanamaz. Yerine TEKRAR
-  URETILEBILIRLIK kanitlandi: 1985-03, 1992-10, 2020-07 yeniden cekildi, diskteki
-  degerlerle maks fark 2.8e-14 (CSV metin round-trip gurultusu). Erken/orta/gec
-  partilerin hepsi ayni kodla uretilmis.
-sonraki: T4 (panel birlestirme)
+### B - MODEL CARD ICIN, KAPIDAN SONRA (hicbiri A'yi bekletmiyor)
+- [ ] MGM istasyon karsilastirmasi: ERA5 sicaklik dogrulamasi (nokta bazli)
+- [ ] MGM istasyon karsilastirmasi: CHIRPS yagis dogrulamasi
+      (417 mm anchor'i coktu - iki eksende eslesmiyor, bkz. commit gunlugu)
+- [ ] SPI guvenilirlik esiginin kalibrasyonu (su an PROVISIONAL 5 mm, bin'ler
+      betimleyici; skill tablosu bunlara BAGLI DEGIL)
+- [ ] DSI resmi havza siniri -> in_official kolonu (uyelik kolonu kalibi
+      sayesinde config degisikligi, yeniden export degil)
+- [ ] Konya Havzasi Kuraklik Yonetim Plani'ndaki resmi esiklerle karsilastirma
+- [ ] PET uc yol karsilastirmasi: FAO-56 vs ERA5 pev vs Hargreaves
+- [ ] Akarcay bulgusunun figuru (uretildi) model card'a
+
+### Teknik borc (A'yi bloklamiyor, unutulmasin diye burada)
+- [x] PET esikleri 45 yildan siklastirildi (0.989 / -3.0 mm)
+- [x] ERA5 vs CHIRPS korelasyonu: 45 yil, r = 0.809
+- [ ] T4'te: tarih anahtari KUME esitligi, outer join + hucre kumesi kontrolu,
+      provenans KOD AGACI hash'i (ham SHA degil), satir sayisi tam 1.522.800
+- [ ] T5'te: FAO-56 ET0 sifirda kirpilacak + *_clamped bayragi
+- [ ] T5'te: kok bolgesi nemi DERINLIK AGIRLIKLI 0.07/0.21/0.72, duz ortalama YASAK

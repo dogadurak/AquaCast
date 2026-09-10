@@ -47,11 +47,37 @@ IMAGES_PER_MONTH = 1
 # "already fetched" from "fetched under a different schema". Adding a band without
 # bumping this would leave earlier years silently skipped and the panel mixed.
 EXPECTED_SCHEMA = [
-    "cell_id", "date", "month", "t2m_c", "t2m_min_c", "t2m_max_c",
-    "precip_era5_mm", "pet_era5_mm", "pet_era5_raw_m",
+    "cell_id", "date", "month",
+    # monthly aggregates - correct as MONTHLY_AGGR provides them
+    "t2m_c", "precip_era5_mm", "pet_era5_mm", "pet_era5_raw_m",
     "swvl1", "swvl2", "swvl3", "swvl4",
+    # FAO-56 inputs derived from DAILY_AGGR - see DAILY_SOURCE below
+    "t2m_max_c", "t2m_min_c", "dewpoint_c", "wind10m_ms", "wind2m_ms",
+    "srad_down_mj_m2_day", "net_solar_mj_m2_day", "net_thermal_mj_m2_day",
+    "surface_pressure_kpa",
     "era5_native_lon", "era5_native_lat", "n_images", "era5_native_cell_id",
 ]
+
+# MONTHLY_AGGR's temperature_2m_max/min are the month's single HOURLY extremes, not
+# the mean of daily extremes that FAO-56 requires. Measured at Konya for 1990-07:
+# MONTHLY_AGGR gives 34.08 / 12.59 C, which matches the hourly extremes exactly,
+# while the mean of daily extremes is 30.34 / 16.97 C. Using the monthly bands
+# would inflate (Tmax - Tmin) by 61% and Hargreaves ET0 by about 27%.
+#
+# DAILY_AGGR averaged over the month reproduces 30.34 / 16.97 exactly, at 31 images
+# per month against HOURLY's 744.
+DAILY_SOURCE = "ECMWF/ERA5_LAND/DAILY_AGGR"
+
+# ERA5 wind is at 10 m; FAO-56 wants 2 m. u2 = u10 * 4.87 / ln(67.8*10 - 5.42).
+WIND_10M_TO_2M = 0.748
+
+# There is no wind-speed band, only u and v components, and taking hypot() of their
+# MONTHLY means yields the magnitude of the vector mean - opposing winds cancel and
+# the speed comes out low, which lowers ET0. Measured at Konya for 1990-07 against
+# the true scalar mean from hourly data: monthly u,v hypot -14.9%, daily hypot
+# -8.6%. Daily is used; the residual -8.6% is recorded as a limitation rather than
+# spending 24x the compute on hourly for a second-order term.
+WIND_SCALAR_BIAS_NOTE = "daily hypot underestimates the scalar mean by ~8.6%"
 
 # Resampling from 0.1 to 0.05 degrees quadruples the cell count. Under bilinear
 # almost every analysis cell gets its own interpolated value; under Earth Engine's
@@ -94,10 +120,41 @@ def month_image(config: dict[str, Any], era5: "ee.ImageCollection", start: "ee.D
     window = era5.filterDate(start, start.advance(1, "month"))
     src = window.first().resample("bilinear")
 
-    kelvin = src.select(bands["t2m_c"]).subtract(273.15).rename("t2m_c")
-    tmin = src.select("temperature_2m_min").subtract(273.15).rename("t2m_min_c")
-    tmax = src.select("temperature_2m_max").subtract(273.15).rename("t2m_max_c")
     precip = src.select(bands["precip_era5_mm"]).multiply(1000).rename("precip_era5_mm")
+
+    # FAO-56 inputs from DAILY_AGGR, averaged over the month. See DAILY_SOURCE.
+    daily = (
+        ee.ImageCollection(DAILY_SOURCE)
+        .filterDate(start, start.advance(1, "month"))
+    )
+    wind_daily = daily.map(
+        lambda i: i.select("u_component_of_wind_10m")
+        .hypot(i.select("v_component_of_wind_10m"))
+        .rename("wind10m_ms")
+    )
+    dmean = daily.mean().resample("bilinear")
+    # The WHOLE temperature family comes from DAILY_AGGR, deliberately.
+    #
+    # MONTHLY_AGGR and DAILY_AGGR are separate products and their monthly-mean
+    # temperature is NOT the same number: measured over the basin for 1990-01 and
+    # 1990-07, they differ by -0.40 / -0.23 C on average but by up to 4.4 / 5.9 C at
+    # individual cells. Mixing MONTHLY's t2m with DAILY's min, max and dewpoint
+    # therefore broke physical invariants that cannot fail on consistent data -
+    # 255 rows with t2m outside [tmin, tmax] and 107 with dewpoint above air
+    # temperature. Sourced consistently from DAILY, both invariants hold with
+    # comfortable margins.
+    kelvin = dmean.select("temperature_2m").subtract(273.15).rename("t2m_c")
+    tmax = dmean.select("temperature_2m_max").subtract(273.15).rename("t2m_max_c")
+    tmin = dmean.select("temperature_2m_min").subtract(273.15).rename("t2m_min_c")
+    dew = dmean.select("dewpoint_temperature_2m").subtract(273.15).rename("dewpoint_c")
+    w10 = wind_daily.mean().resample("bilinear").rename("wind10m_ms")
+    w2 = w10.multiply(WIND_10M_TO_2M).rename("wind2m_ms")
+    # Radiation _sum bands accumulate J/m2 over each day; the monthly mean of those
+    # is J/m2/day, and FAO-56 works in MJ/m2/day.
+    srad = dmean.select("surface_solar_radiation_downwards_sum").divide(1e6).rename("srad_down_mj_m2_day")
+    nsol = dmean.select("surface_net_solar_radiation_sum").divide(1e6).rename("net_solar_mj_m2_day")
+    nthe = dmean.select("surface_net_thermal_radiation_sum").divide(1e6).rename("net_thermal_mj_m2_day")
+    pres = dmean.select("surface_pressure").divide(1000).rename("surface_pressure_kpa")
 
     # ERA5 fluxes are positive downward, so evaporation is negative. The raw value
     # is carried alongside the converted one so the sign convention is testable
@@ -110,7 +167,10 @@ def month_image(config: dict[str, Any], era5: "ee.ImageCollection", start: "ee.D
     ]
     n_obs = window.select(bands["t2m_c"]).count().rename("n_obs")
 
-    image = kelvin.addBands([tmin, tmax, precip, pet_raw, pet, *swvl, n_obs])
+    image = kelvin.addBands([
+        precip, pet_raw, pet, *swvl,
+        tmax, tmin, dew, w10, w2, srad, nsol, nthe, pres, n_obs,
+    ])
     return image, window.size()
 
 
@@ -255,6 +315,37 @@ def export_year(
         col = f"swvl{k}"
         if not land[col].between(0.0, 1.0).all():
             problems.append(f"{col} outside [0, 1] m3/m3")
+
+    # Physical invariants, not range guards. These hold everywhere on Earth in every
+    # month, so they cannot fire on correct data - but they break immediately if two
+    # bands are swapped, if a unit conversion is applied to the wrong one, or if the
+    # daily and monthly sources are mixed up. That is a stronger test than any
+    # plausibility band, and it needs no external reference.
+    bad_order = int((~(
+        (land["t2m_min_c"] <= land["t2m_c"] + 1e-6)
+        & (land["t2m_c"] <= land["t2m_max_c"] + 1e-6)
+    )).sum())
+    if bad_order:
+        problems.append(
+            f"{bad_order} rows violate t2m_min <= t2m <= t2m_max - the temperature "
+            "bands are swapped or drawn from mismatched sources"
+        )
+    bad_dew = int((land["dewpoint_c"] > land["t2m_c"] + 1e-6).sum())
+    if bad_dew:
+        problems.append(
+            f"{bad_dew} rows have dewpoint above air temperature, which is "
+            "physically impossible - suspect a band or unit mix-up"
+        )
+    if not land["wind10m_ms"].gt(0).all():
+        problems.append("wind10m_ms is not strictly positive")
+    if not land["srad_down_mj_m2_day"].between(0.5, 45.0).all():
+        problems.append(
+            f"srad_down_mj_m2_day outside [0.5, 45] MJ/m2/day (min "
+            f"{land['srad_down_mj_m2_day'].min():.2f}, max "
+            f"{land['srad_down_mj_m2_day'].max():.2f}) - suspect a J->MJ error"
+        )
+    if not land["surface_pressure_kpa"].between(60.0, 110.0).all():
+        problems.append("surface_pressure_kpa outside [60, 110] kPa")
     if (land["precip_era5_mm"] < 0).any():
         problems.append("negative precip_era5_mm")
 
@@ -293,13 +384,7 @@ def export_year(
     if problems:
         raise AssertionError(f"{year}: " + "; ".join(problems))
 
-    keep = [
-        "cell_id", "date", "month", "t2m_c", "t2m_min_c", "t2m_max_c",
-        "precip_era5_mm", "pet_era5_mm", "pet_era5_raw_m",
-        "swvl1", "swvl2", "swvl3", "swvl4",
-        "era5_native_lon", "era5_native_lat", "n_images",
-    ]
-    out = df[keep].copy()
+    out = df[[c for c in EXPECTED_SCHEMA if c != "era5_native_cell_id"]].copy()
     out["era5_native_cell_id"] = (
         (out["era5_native_lon"] * 1000).round().astype("int64") * 1_000_000
         + (out["era5_native_lat"] * 1000).round().astype("int64")
@@ -317,6 +402,13 @@ def export_year(
         "fetched_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "rows": len(out),
         "cells": len(grid_ids),
+        "t2m_source": DAILY_SOURCE,
+        "t2m_source_note": (
+            "MONTHLY_AGGR and DAILY_AGGR disagree on monthly mean temperature by up "
+            "to ~6 C at individual cells; the temperature family is taken wholly "
+            "from DAILY_AGGR so the physical invariants hold."
+        ),
+        "wind_note": WIND_SCALAR_BIAS_NOTE,
         "schema_fingerprint": schema_fingerprint(EXPECTED_SCHEMA),
         "schema_columns": EXPECTED_SCHEMA,
         "resampling": "bilinear",

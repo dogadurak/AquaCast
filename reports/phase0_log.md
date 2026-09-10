@@ -70,3 +70,70 @@ acik varsayim: Akarcay tespiti alan + cografya kanitina dayali HIPOTEZ; resmi
   poligon elde degil, geometri karsilastirmasi yapilmadi. Fark figuru bu yuzden
   HydroBASINS'i ayristiriyor, resmi sinirdan cikarmiyor.
 sonraki: T2 (CHIRPS export) - membership_column secimi kullaniciya soruldu
+
+## T2 - CHIRPS export (tamamlandi)
+durum: OK
+artefakt: data/raw/chirps/chirps_1981..2025.csv (45 dosya + 45 manifest),
+  reports/chirps_continuity.json, reports/chirps_bias.json,
+  reports/figures/chirps_continuity_{light,dark}.png
+assert: hepsi gecti.
+  - yil dosyasi: beklenen 45 -> gercek 45
+  - toplam satir: beklenen 1.522.800 -> gercek 1.522.800
+  - her ay tam 6 pentad (koleksiyon) VE piksel basina n_obs=6 (kismi maskeleme yok)
+  - havza-ort yillik: export vs on kontrol, her yil %0.1 altinda
+    (or. 1981 595.9 vs 595.4 = +0.07%; 1982 390.4 vs 390.3 = +0.04%)
+  - izole-sifir orani: beklenen <=1% -> gercek 0.0347% (529 satir)
+sure: ~3 sa (kesintiler + iki assert duzeltmesi dahil)
+surpriz: dort tane.
+  (1) On kontrol: V3 PENTAD'da kaynak/versiyon bayragi YOK, sadece year/month/
+      pentad. Urun hatti degisikligi metadata'dan tespit edilemiyor. Zaman
+      serisinde basamak yok; 2022-2025 era ortalamasi dusuk ama 2023 = 467 mm
+      uzun donem ortalamasinin USTUNDE, yani seviye kaymasi degil. 2025 (287 mm)
+      45 yilin en kurak yili. Prelim sorusu CHC dokumantasyonundan kapatildi:
+      final, takip eden ayin ucuncu haftasinda; 2025-12'nin final'i ~2026-01-20,
+      bu calistirmadan sekiz ay once. Panele prelim girmiyor.
+  (2) Sifir testini UC kez yazdim, ilk ikisi yanlisti. v1 grid geneli (cok kaba,
+      1986-05'i kacirdi), v2 hucre komsulugu (kurak ayda tersine dondu, 1990-03'te
+      2009 gercek sifirin 1882'sini "izole" saydi), v3 kume sinir minimumu
+      (dogru mekanizma: gercek kuraklik gradyan, artefakt ucurum).
+  (3) 417 mm esigi kategori hatasiydi: havza-ORTALAMA YILLIK degeri tek hucrenin
+      AYLIK degerine sinir yapmisim, ustelik halka hucrelerine de uygulamisim.
+      720.6 mm'lik deger gercekti - Toros yamacinda, havza disinda bir halka
+      hucresi. Yerine iki bagimsiz hesap yolunun karsilastirmasi kondu.
+  (4) BIAS BULGUSU + beklenmedik dogrulama: CHIRPS havza-ort yillik 463.2 mm vs
+      resmi 417 mm = +%11.1. Ama Akarcay lobu cikarilinca +%7.7'ye iniyor.
+      Akarcay daha bati, daha Akdeniz etkisinde, daha yagisli. T1'de ALAN
+      aritmetiginden cikan "Akarcay buraya ait degil" sonucu, burada YAGIS
+      klimatolojisinden bagimsiz olarak dogrulandi. Aranmadi, cikti.
+acik varsayim: CHIRPS final urunleri yeniden isleniyor; her yil dosyasinin
+  manifest'inde fetched_utc var, sonraki bir farklilik atfedilebilir olsun diye.
+sonraki: T3 (ERA5-Land export) calisiyor
+
+## T3 - ERA5-Land export (devam ediyor)
+durum: DEVAM
+artefakt: data/raw/era5/era5_<yil>.csv (calisiyor), reports/station_cells.json
+assert (1990 test yili): hepsi gecti.
+  - farkli deger orani (bilinear vs nearest): beklenen >=0.90 -> gercek 1.000
+    (nearest ~0.25 verirdi; 0.05 derece gridi gercekten test eden tek kontrol)
+  - ERA5 vs CHIRPS 1990: 358 vs 351 mm = +%2.0 (tolerans %35)
+  - fiziksel invariantlar: tmin<=t2m<=tmax ve dewpoint<=t2m, 0 ihlal
+  - su maskesi: 0 nodata hucre (ERA5-Land Tuz Golu'nu kara sayiyor)
+  - ERA5 yerli piksel: 756 adet, 2820 hucre icin ~3.7 hucre/piksel
+surpriz: uc tane.
+  (1) MONTHLY_AGGR'in temperature_2m_max/min'i ayin TEKIL SAATLIK ucu, ortalama
+      gunluk uc degil. 1990-07 Konya: MONTHLY 34.08/12.59, gercek ort. gunluk
+      30.34/16.97. (Tmax-Tmin) %61 sisik, Hargreaves ET0 %27 yuksek cikardi.
+      FAO-56 de ayni girdiyi istedigi icin bu bant her iki yontemi de bloke etti.
+      Cozum: DAILY_AGGR ay ortalamasi -> 30.34/16.97 birebir, ayda 31 goruntu.
+  (2) MONTHLY_AGGR ile DAILY_AGGR'in temperature_2m'i AYNI DEGIL: ortalama fark
+      -0.40/-0.23 C ama hucre bazinda 4.4/5.9 C'ye kadar. Karistirinca 255 satir
+      t2m<[tmin,tmax] disinda, 107 satir dewpoint>t2m cikti. Sicaklik ailesinin
+      tamami DAILY_AGGR'a cekildi, invariantlar rahat marjla gecti.
+  (3) Ruzgar: dogrudan hiz bandi yok. Aylik u,v'nin hypot'u vektorel ortalamanin
+      buyuklugu - gercek skaler ortalamaya gore -%14.9. Gunluk hypot -%8.6.
+      Gunluk kullanildi, kalan sapma limitasyon olarak yazildi (HOURLY 24 kat
+      compute, ikinci mertebe degiskende ikinci mertebe duzeltme).
+acik varsayim: istasyon koordinatlari benim tahminim, MGM'nin resmi degerleri
+  degil. Karaman (2.12 km) ve Beysehir (2.02 km) hucre merkezine uzak, birkac
+  km'lik duzeltme komsu hucreye tasiyabilir. Normaller gelince yeniden hesaplanacak.
+sonraki: export bitince T3 kapanacak, sonra T4 (panel birlestirme)

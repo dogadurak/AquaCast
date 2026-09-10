@@ -320,6 +320,29 @@ Make silent corruption impossible. Accept rework.
   number cannot be faked by absence. This is the same reason the working protocol
   demands the number rather than "the test passed".
 
+## 21. Quantities bound by an inequality, drawn from different sources
+**Class:** silent corruption
+
+- **SYMPTOM:** Every value is individually plausible. Nothing is out of range. The
+  physics is quietly broken: air temperature below its own daily minimum, dewpoint
+  above air temperature.
+- **MECHANISM:** ERA5-Land publishes MONTHLY_AGGR and DAILY_AGGR as separate
+  products. Their monthly mean temperature is **not the same number** — measured over
+  this basin for 1990-01 and 1990-07, they differ by −0.40 / −0.23 °C on average but
+  by up to **4.4 / 5.9 °C** at individual cells. Taking `t2m` from one and
+  `t2m_min`, `t2m_max`, `dewpoint` from the other produced 255 rows with t2m outside
+  [tmin, tmax] and 107 with dewpoint above air temperature. Each field was correct;
+  the combination was not.
+- **DEFENCE:** Any set of quantities related by an inequality or an identity must
+  come from **one** source and one aggregation route. And assert the relation:
+  `tmin <= tmean <= tmax`, `dewpoint <= temperature`. These hold everywhere on Earth
+  in every month, so they cannot fire on consistent data, but they break instantly on
+  a swapped band, a misapplied unit, or mixed sources. That is a far stronger test
+  than any plausibility band, and it needs no external reference — the best kind of
+  assertion this project has found.
+- Corollary: products from the same family are not interchangeable just because they
+  share a grid and a name. Check, do not assume.
+
 ---
 
 ## Adding an entry

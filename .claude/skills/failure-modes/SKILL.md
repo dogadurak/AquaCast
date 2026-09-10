@@ -486,6 +486,33 @@ would flip, not 0.065% of them.
 
 ---
 
+# A PATTERN THAT KEEPS WORKING — bake in the measurement, keep the decision in config
+
+Used three times now, each time after a first attempt that froze a judgement into an
+artefact:
+
+| Where | Frozen judgement (rejected) | Measurement stored | Decision in config |
+|---|---|---|---|
+| T1 | drop cells outside the basin | `in_hydrobasins`, `in_akarcay_lobe` | `aoi.membership_column` |
+| T2 | drop or fill artefact zeros | zero-cluster diagnostics | `ISOLATED_ZERO_MAX_SHARE` |
+| T5 | flag SPI as unreliable below a threshold | `spi1_mm_per_unit` per cell-month | `spi_reliability.unreliable_below_mm` |
+
+The measurement is true regardless of the decision; the decision is a judgement that
+will be revised. Freezing the decision into the data makes revising it a
+recomputation - and in T1's case it would have meant re-exporting 45 years to recover
+a handful of cells.
+
+A second benefit, found in T5: reporting **binned by the measurement** rather than
+gated by a threshold shows *where* degradation begins instead of asserting it. That is
+both more informative and more defensible than a cut point chosen before the evidence
+exists.
+
+> **Store what you measured. Keep what you decided in config. Then revising a
+> judgement is a config change, not a rebuild - and the evidence for revising it is
+> already in the data.**
+
+---
+
 ## Adding an entry
 
 When a miss is caught — by me, by the skeptic agent, or by a failing run — append it

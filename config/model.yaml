@@ -1,18 +1,48 @@
 targets:
-  # (target, lead) pairs must not overlap their predictor window
-  - name: spi_1
-    lead_months: 1
-    tier: 1
-    kind: regression
-  - name: sm_anom
-    lead_months: 1
-    tier: 1
-    kind: regression
+  # (target, lead) pairs must not overlap their predictor window.
+  #
+  # SPI-3 is PRIMARY as of the T5 pre-flight diagnostic. Moving SPI-1 by one unit
+  # takes only 2.0 mm in August and 3.3 mm in July - below what CHIRPS resolves over
+  # this basin - so summer SPI-1 reports product behaviour rather than meteorology.
+  # SPI-3's weakest month needs 10.1 mm and it never approaches that regime.
+  # See reports/spi_reliability_note.md.
   - name: spi_3
     lead_months: 3
     tier: 2
+    role: primary
     kind: classification      # P(SPI-3 < -1)
     threshold: -1.0
+  - name: spi_1
+    lead_months: 1
+    tier: 1
+    role: secondary
+    kind: regression
+    # Never pool across months for this target: pooling averages the summer
+    # degradation into the robust winter months and hides it.
+    report_by_calendar_month: true
+  - name: sm_anom
+    lead_months: 1
+    tier: 1
+    role: secondary
+    kind: regression
+
+spi_reliability:
+  # THE MEASUREMENT LIVES IN THE PANEL, THE DECISION LIVES HERE.
+  # spi1_mm_per_unit and spi3_mm_per_unit are computed for every (cell, calendar
+  # month) and stored - they are measured quantities, correct without any threshold.
+  #
+  # Skill is reported binned by sensitivity rather than gated by a cut point, so the
+  # curve shows where degradation begins instead of asserting where it does. Same
+  # pattern as aoi.membership_column: bake the measurement into the data, keep the
+  # decision in config, so revising it is a config change and not a recomputation.
+  sensitivity_column_spi1: spi1_mm_per_unit
+  sensitivity_column_spi3: spi3_mm_per_unit
+  report_bins_mm: [0, 3, 5, 10, 1000]
+  # Optional derived flag for filtering and for the interface. PROVISIONAL and
+  # descriptive: no measured CHIRPS uncertainty at low monthly amounts exists yet.
+  # Draw it on the sensitivity curve once the MGM station comparison supplies one.
+  unreliable_below_mm: 5.0
+  unreliable_flag_is_derived_at_analysis_time: true
 
 split:
   train: [2001-01-01, 2016-12-31]

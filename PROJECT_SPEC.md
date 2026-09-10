@@ -173,12 +173,26 @@ The middle column is the design; the right column is what an honest legend has t
 
 ### 4.1 Targets
 
-| Target | Lead | Overlap with observed data | Tier |
-|---|---|---|---|
-| SPI-1 | +1 month | none | 1 |
-| SPI-3 | +3 months | none | 2 |
-| Soil moisture anomaly | +1 month | none | 1 |
-| NDVI anomaly | +1 month | none | 1 |
+| Target | Lead | Overlap with observed data | Tier | Role |
+|---|---|---|---|---|
+| **SPI-3** | **+3 months** | none | 2 | **primary** |
+| SPI-1 | +1 month | none | 1 | secondary, reported per calendar month |
+| Soil moisture anomaly | +1 month | none | 1 | secondary |
+| NDVI anomaly | +1 month | none | 1 | secondary (Phase 1) |
+
+**SPI-3 is primary, and that is a measured decision rather than a preference.** The
+T5 pre-flight found that moving SPI-1 by one unit takes 2.0 mm in August and 3.3 mm in
+July — below what CHIRPS resolves over this basin, whose July minimum across all 2,820
+cells was 2.42 mm. Summer SPI-1 therefore reports the product's behaviour at small
+amounts, not meteorology. SPI-3's weakest month needs 10.1 mm and it stays clear of
+that regime in every month and every cell.
+
+SPI-1 is kept because it is genuinely robust from October to June (19–25 mm per unit),
+but its skill is reported **per calendar month, never pooled** — pooling would average
+the summer degradation into the winter months and conceal it.
+
+The standard reliability criterion for this situation does not apply here, and the
+reason is itself a finding: see `reports/spi_reliability_note.md`.
 
 Targets are chosen so that **no target overlaps its own predictor window**. This is the structural fix for Problem 1: rather than merely correcting for the overlap in evaluation, the primary targets avoid it entirely. SPI-6 and SPI-12 may be produced as *monitoring* layers (current conditions) but are not forecast targets in v1.
 

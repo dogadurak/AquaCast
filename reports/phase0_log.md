@@ -236,3 +236,37 @@ duzeltecektim (CLAUDE.md working style kurali); gecerli olmadigi icin de ayni
 titizlikle KONTROL EDILDIGI ve NEDEN aksiyon alinmadigi kayit altina alinmali -
 sessizce atlanan bir talep, kontrolun hic yapilmadigi izlenimini verir.
 sonraki: T5 - src/features/spi.py
+
+## T5 - SPI-1 ve SPI-3 (tamamlandi)
+durum: OK
+artefakt: data/processed/panel_monthly.parquet (+4 kolon: spi_1, spi_3,
+  spi1_mm_per_unit, spi3_mm_per_unit), reports/spi_validation.json
+assert: hepsi gecti.
+  - satir: beklenen 1.522.800 -> gercek 1.522.800
+  - spi_1/spi_3 araligi: [-4,4] icinde
+  - spi_3 null: beklenen 5640 (2 ay x 2820 hucre, akumulasyon isinmasi) -> gercek 5640
+  - spi_1 null: beklenen 0 -> gercek 0
+  - elle 3-aylik toplam vs vektorlestirilmis rolling sum: birebir esit
+  - climate_indices REFERANS UYGULAMAYLA tam seri (540 ay, 3 hucre) karsilastirma:
+    maks|fark| = 0.00e+00 (esik <1e-9)
+sure: ~20 dk (iki kod hatasi dahil)
+surpriz: iki kod hatasi, ikisi de kendi yazdigim kod:
+  (1) _rolling_sum'da kayan pencere aritmetigi hatali - csum'u IKI KEZ ayri
+      dilimliyordum, genislikler 538 vs 536 uyusmadi, SPI-3 hesaplanmadan
+      cokme. csum'u k kadar SAGA KAYDIRIP (sifir dolgulu) TEK dilimde
+      cikarma olarak duzeltildi.
+  (2) climate_indices karsilastirmasinda "~0" string'ini "0.00e+00" ile
+      essitlik testi yapmisim - hicbir zaman esit olamaz, gercek sonuc
+      (fark tam 0) yanlislikla MISMATCH olarak raporlandi. Say1sal esik
+      testine (worst<1e-9) cevrildi.
+  Ucuncusu kod hatasi degil ama not edilmeli: spi1_mm_per_unit Ocak ayinda
+  bu oturumda 23.7 mm cikti, onceki oturumun ad-hoc (commit edilmemis)
+  olcumu 19.2 demisti - 11/12 ay birebir eslesirken sadece Ocak sapiyor.
+  Cift bagimsiz dogrulama yapildi: (a) climate_indices'e karsi tam seri
+  karsilastirmasi 0.00e+00 verdi, (b) panelden SIFIRDAN yazilan ayri bir
+  script ayni 23.7'yi uretti. Mevcut sonuc guvenilir; onceki ad-hoc script
+  kaybolmus ve kucuk bir farkli olabilir, arastirilmadi (dusuk oncelik,
+  Faz 0 kapisini etkilemiyor).
+acik varsayim: yok. climate_indices dogrulamasi TAM SERI uzerinde (orneklem
+  degil) yapildi - T4'un checksum dersi burada da uygulandi.
+sonraki: T6 (dort baseline, MODEL YAZMADAN ONCE)

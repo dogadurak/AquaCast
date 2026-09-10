@@ -1,0 +1,49 @@
+{
+  "generated_utc": "2026-09-10T22:55:57+00:00",
+  "provenance": {
+    "git_sha": "c6f6d625439436b9263e6bd3377518d48f99cad0",
+    "git_dirty": true,
+    "git_dirty_files": [
+      "src/features/spi.py"
+    ],
+    "producers_dirty": [
+      "src/features/spi.py"
+    ],
+    "code_tree": {
+      "src": "a5189be646238cc65e64f9936f7cf7b58c220442",
+      "config": "db476d30e5dfaaaa5d76d27a1cf863df201a3951"
+    },
+    "producers": [
+      "src/features/spi.py",
+      "config/data.yaml"
+    ],
+    "producer_digest": "4cec6177d058806a"
+  },
+  "fit_period": [
+    1981,
+    2016
+  ],
+  "application_period": [
+    1981,
+    2025
+  ],
+  "reference_impl_check": {
+    "419900423": {
+      "n_months": 540,
+      "max_abs_diff": 0.0,
+      "mean_abs_diff": 0.0
+    },
+    "425900412": {
+      "n_months": 540,
+      "max_abs_diff": 0.0,
+      "mean_abs_diff": 0.0
+    },
+    "430100440": {
+      "n_months": 540,
+      "max_abs_diff": 0.0,
+      "mean_abs_diff": 0.0
+    }
+  },
+  "max_abs_diff_vs_reference": 0.0,
+  "spi3_warmup_nulls": 5640
+}

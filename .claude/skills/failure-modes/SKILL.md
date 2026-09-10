@@ -21,6 +21,37 @@ Make silent corruption impossible. Accept rework.
 
 ---
 
+# THE COMPARISON RULE — read this before any assertion that compares two numbers
+
+**Before comparing two numbers, verify they match on three axes:**
+
+- **(a) POPULATION** — the same cell set, the same masking, the same area.
+- **(b) QUANTITY** — the same physical definition, taken from the **product's
+  documentation**, never inferred from its name.
+- **(c) SCALE** — the same temporal and spatial aggregation.
+
+**If any one of the three fails, the difference you get is not a finding. It is a
+category error.**
+
+This project made that error three times, and each time the number looked reasonable:
+
+| Where | (a) | (b) | (c) | What it produced |
+|---|---|---|---|---|
+| T2 | ✗ | | ✗ | A basin-mean **annual** total used to bound a single cell's **monthly** value — and applied to ring cells outside the analysis population. Halted a 45-year export on a correct 720.6 mm. |
+| T3 | ✗ | | | An analysis-population sanity check applied to ring cells on the Taurus flank, a different precipitation regime entirely. |
+| T3 | | ✗ | | ERA5 `pev` — **open-water (pan) evaporation** per ECMWF — compared against FAO-56 reference-crop ET₀ and read as a bias. Pan evaporation exceeds reference ET *by definition*; most of the gap is the definition, not an error. |
+
+Note what the three have in common: none produced an implausible number. A category
+error does not announce itself, because both sides are individually correct. The only
+defence is checking the three axes *before* the comparison, not sanity-checking the
+result afterwards.
+
+Corollary for reporting: when (b) does not match, do not call the difference a bias.
+Call it what it is — the ratio of two different definitions — and state both
+definitions beside it.
+
+---
+
 ## 1. SPI accumulation window overlaps the forecast lead
 **Class:** silent corruption
 

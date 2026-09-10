@@ -1,5 +1,5 @@
 {
-  "generated_utc": "2026-09-10T09:42:05+00:00",
+  "generated_utc": "2026-09-10T11:09:11+00:00",
   "official_annual_mm": 417.0,
   "official_source": "T.C. Tar\u0131m ve Orman Bakanl\u0131\u011f\u0131, Su Y\u00f6netimi Genel M\u00fcd\u00fcrl\u00fc\u011f\u00fc - Konya Havzas\u0131 Tan\u0131t\u0131m (417 mm, 4,980,534 ha)",
   "years_exported": [
@@ -167,5 +167,6 @@
     }
   },
   "population_spread_mm": 14.01335064220018,
+  "open_assumption_reference_period": "The reference period behind the official 417 mm has not been established. Ours is 1981-2025. If the official figure is an older normal, some of the difference reported here is a period effect rather than product bias.",
   "interpretation": "CHIRPS is designed for data-sparse tropical regions and has a documented positive bias over T\u00fcrkiye, strongest for low precipitation amounts. This is that bias measured for the Konya basin on the exported panel. It is a result to report, not a gate: the model is trained on CHIRPS throughout, so a constant multiplicative bias is absorbed by the standardisation that produces SPI. What it does affect is any statement in absolute mm."
 }

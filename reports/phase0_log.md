@@ -153,6 +153,17 @@ sonraki: export bitince T3 kapanacak, sonra T4 (panel birlestirme)
       (Karaman 2.12 km, Beysehir 2.02 km hucre sinirina yakin).
 
 ### T4'te
+- [ ] TARIH ANAHTARI HIZASI. CHIRPS ve ERA5 dosyalarinda ay ayni sekilde mi
+      temsil ediliyor? Ikisi de ayin ilk gunu mu, saat dilimi var mi? Farkliysa
+      join ya null uretir ya satir cogaltir - ikisi de sessiz. Iki tarafi
+      normalize et ve join ONCESI iki tarafin tarih KUMELERININ birebir ayni
+      oldugunu assert et (set esitligi, sayi esitligi degil).
+- [ ] JOIN TURU. Inner join KULLANMA. Outer join yap, sonra
+      set(CHIRPS.cell_id) == set(ERA5.cell_id) oldugunu AYRICA assert et.
+      Inner join bir tarafta eksik hucre varsa sessizce duser ve satir sayisi
+      makul kalir. ERA5'te su maskesi 0 cikti ama bunu VARSAYMA, olc.
+- [ ] Join sonrasi satir sayisi: beklenen 2820 x 540 = 1.522.800. Ne eksik ne
+      fazla; fazla olmasi tarih/hucre anahtarinda cogaltma demektir.
 - [ ] PROVENANS ASSERT'I: tum yil dosyalari AYNI git SHA ile uretilmis olmali,
       ve hicbiri git_dirty=true olmamali. Farkliysa DUR. Sema kontrolu bunu
       goremez - ERA5 sicaklik kaynagi degisimi semayi degil DEGERLERI degistirdi.

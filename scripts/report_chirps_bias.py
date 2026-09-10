@@ -11,9 +11,19 @@ Su Yönetimi Genel Müdürlüğü, "Konya Havzası Tanıtım". The same report g
 basin area as 4,980,534 ha = 49,805 km², matching the official area figure in
 config/data.yaml, so both describe one delineation.
 
-The figure is reported for three cell populations, because the basin boundary is
-itself uncertain (see docs/data_dictionary.md §1.3) and the reader should be able
-to see how much the choice moves the answer.
+THE COMPARISON RULE, applied to this figure honestly (see the head of
+.claude/skills/failure-modes/SKILL.md):
+
+  (a) POPULATION - only approximately matched. The official mean is over the DSI
+      basin (49,805 km2); ours is over HydroBASINS cells. Three populations are
+      therefore reported, and their 14 mm spread is the size of that mismatch.
+  (b) QUANTITY  - matched. Both sides are precipitation over the same basin, which
+      is what makes "bias" the right word here, unlike the ERA5 pev vs FAO-56 ET0
+      comparison where the two quantities differ by definition.
+  (c) SCALE     - NOT ESTABLISHED. The reference period behind the ministry's
+      417 mm is unknown to us; ours is 1981-2025. If theirs is an older normal,
+      part of what we are calling bias is a period difference. This is an OPEN
+      ASSUMPTION and the figure carries it until the period is confirmed.
 
 Run:  python -m scripts.report_chirps_bias
 """
@@ -96,6 +106,11 @@ def main() -> None:
     print(f"\nSpread across cell populations: {spread:.1f} mm/yr "
           f"({spread / OFFICIAL_ANNUAL_MM:.1%} of the reference) - i.e. how much the "
           f"unresolved\nbasin boundary and the cropland mask move this number.")
+    print("\nOPEN ASSUMPTION - axis (c) of the comparison rule is not established.")
+    print("  The reference period behind the official 417 mm is unknown to us; ours")
+    print("  is 1981-2025. If the official figure is an older normal, part of what is")
+    print("  labelled bias above is a period effect. The word 'bias' is justified on")
+    print("  axis (b) - both sides are precipitation - but not yet on axis (c).")
 
     payload = {
         "generated_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -106,6 +121,12 @@ def main() -> None:
         "mask_min_fraction": threshold,
         "populations": results,
         "population_spread_mm": spread,
+        "open_assumption_reference_period": (
+            "The reference period behind the official 417 mm has not been "
+            "established. Ours is 1981-2025. If the official figure is an older "
+            "normal, some of the difference reported here is a period effect "
+            "rather than product bias."
+        ),
         "interpretation": (
             "CHIRPS is designed for data-sparse tropical regions and has a documented "
             "positive bias over Türkiye, strongest for low precipitation amounts. This "

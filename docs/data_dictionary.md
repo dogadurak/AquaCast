@@ -248,8 +248,24 @@ runs about 1,500–1,600 mm/yr, against a typical FAO-56 ET₀ of 1,100–1,300 
 this basin.
 
 So it is kept as a **comparison column only**. SPEI uses the FAO-56 Penman-Monteith
-ET₀ computed from the DAILY_AGGR inputs. Quantifying the gap between the two is a
-model-card finding, in the same spirit as the CHIRPS bias figure.
+ET₀ computed from the DAILY_AGGR inputs.
+
+**The gap between the two is not a bias, and must not be reported as one.** Open-water
+evaporation exceeds reference-crop evapotranspiration *by definition* — different
+surface, different roughness, no stomatal resistance. Measuring 1,500–1,600 mm/yr
+against 1,100–1,300 and calling ERA5 "25% high" would be comparing two different
+physical quantities and reading the definition as an error. See the comparison rule at
+the head of `.claude/skills/failure-modes/SKILL.md`, axis (b).
+
+The ratio is still worth recording, because it tells a reader how far apart the two
+definitions land for this basin. It is reported as **the ratio of two PET definitions,
+with both definitions named**, and it belongs in the model card as the **reason for a
+data choice** — *ERA5 `pev` is pan evaporation, so it was not used for SPEI; FAO-56
+ET₀ was computed instead* — not as a validation result.
+
+This is unlike the CHIRPS figure, which **is** a bias: there, satellite precipitation
+and gauge precipitation are the same physical quantity over the same basin, so their
+difference is measurement error rather than definition.
 
 Because it is not the primary quantity, **it is not clamped**: `pet_era5_mm` is the
 raw ERA5 value with the sign flipped, and `pet_era5_raw_mm` carries the unflipped

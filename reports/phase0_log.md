@@ -137,3 +137,31 @@ acik varsayim: istasyon koordinatlari benim tahminim, MGM'nin resmi degerleri
   degil. Karaman (2.12 km) ve Beysehir (2.02 km) hucre merkezine uzak, birkac
   km'lik duzeltme komsu hucreye tasiyabilir. Normaller gelince yeniden hesaplanacak.
 sonraki: export bitince T3 kapanacak, sonra T4 (panel birlestirme)
+
+## ACIK ISLER - kapanmadan gecilmeyecek
+
+### T3 kapanisinda
+- [ ] PET esiklerini SIKLASTIR. Su an PROVISIONAL: PET_POSITIVE_MIN_SHARE=0.98,
+      PET_MIN_PLAUSIBLE_MM=-5.0. Olculen (tek yil, 1983): %0.065 non-pozitif,
+      minimum -0.53 mm. Yani esikler 30x ve 10x gevsek - T2'deki "max<1000mm"
+      ile ayni sinif, gercekci hicbir hatayi yakalamaz. Export bitince 45 yilin
+      manifest'lerindeki pet_nonpositive_rows / pet_min_mm dagilimina bak,
+      esigi olculen maksimumun ~3 katina cek.
+- [ ] ERA5 vs CHIRPS yillik korelasyonu (>=5 esli yil gerekiyordu, artik 45 var).
+- [ ] Istasyon normalleri gelince nokta bazli ERA5 dogrulamasi; koordinatlar
+      guncellenince scripts/station_cells.py yeniden calistirilacak
+      (Karaman 2.12 km, Beysehir 2.02 km hucre sinirina yakin).
+
+### T4'te
+- [ ] PROVENANS ASSERT'I: tum yil dosyalari AYNI git SHA ile uretilmis olmali,
+      ve hicbiri git_dirty=true olmamali. Farkliysa DUR. Sema kontrolu bunu
+      goremez - ERA5 sicaklik kaynagi degisimi semayi degil DEGERLERI degistirdi.
+- [ ] precip_zero_isolated bayragi panelde turetilecek (ham export'a konmadi;
+      diskteki CSV'lerden hesaplanabilir, yeniden cekme gerektirmez).
+- [ ] MODIS kolonlari 1981-2000 icin null + *_available=false; satirlar ATILMAYACAK.
+
+### T5'te
+- [ ] FAO-56 ET0 sifirda kirpilacak, *_clamped bayragi ile, ham deger saklanacak.
+      Net radyasyon negatif ve VPD kucukken PM hafif negatif cikabilir.
+- [ ] Kok bolgesi toprak nemi DERINLIK AGIRLIKLI: 0.07*swvl1 + 0.21*swvl2 +
+      0.72*swvl3. Duz ortalama YASAK (7 cm deri katmanini 10 kat fazla agirliklar).

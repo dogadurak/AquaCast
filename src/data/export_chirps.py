@@ -27,6 +27,7 @@ import pandas as pd
 
 from src.data.gee_io import (
     ROOT,
+    provenance,
     schema_fingerprint,
     atomic_write,
     fetch_features,
@@ -338,6 +339,7 @@ def export_year(
             "isolated_zero_cells": isolated_total,
         },
         "n_obs_per_pixel": PENTADS_PER_MONTH,
+        "provenance": provenance(),
         "schema_fingerprint": schema_fingerprint(EXPECTED_SCHEMA),
         "schema_columns": EXPECTED_SCHEMA,
         "basin_mean_annual_mm": basin_mean_annual,

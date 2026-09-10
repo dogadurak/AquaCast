@@ -32,6 +32,7 @@ import pandas as pd
 
 from src.data.gee_io import (
     ROOT,
+    reduce_to_grid,
     atomic_write,
     fetch_features,
     initialize,
@@ -129,12 +130,12 @@ def cropland_fraction(config: dict[str, Any], proj: "ee.Projection") -> "ee.Imag
     classes = config["grid"]["mask"]["landcover_classes"]
     wc = ee.ImageCollection(config["sources"]["landcover"]).first()
     binary = wc.remap(classes, [1] * len(classes), 0).unmask(0)
-    subsampled = binary.reproject(crs="EPSG:4326", scale=100)
-    return (
-        subsampled.reduceResolution(ee.Reducer.mean(), maxPixels=4000)
-        .reproject(proj)
-        .rename("crop_frac_2021")
-    )
+    # 100 m is PINNED: it is the subsample that produced the grid now baked into
+    # data/interim/grid_cells.csv and, through it, 45 years of CHIRPS export.
+    # Changing it changes crop_frac_2021 and possibly the cell count.
+    return reduce_to_grid(
+        binary, proj, ee.Reducer.mean(), intermediate_scale_m=100.0
+    ).rename("crop_frac_2021")
 
 
 def worldcover_gap_count(config: dict[str, Any], geom: "ee.Geometry", proj: "ee.Projection") -> int:
@@ -148,9 +149,11 @@ def worldcover_gap_count(config: dict[str, Any], geom: "ee.Geometry", proj: "ee.
     # Same 100 m intermediate as cropland_fraction. Reducing 10 m straight to the
     # analysis grid needs 360,001 input pixels per output pixel against a 65,536
     # ceiling - failure-modes entry 13, walked into once while writing this file.
-    missing = wc.mask().Not().rename("missing").reproject(crs="EPSG:4326", scale=100)
-    gaps = missing.reduceResolution(ee.Reducer.mean(), maxPixels=4000)
-    counted = gaps.reproject(proj).gt(0).selfMask().reduceRegion(
+    missing = wc.mask().Not().rename("missing")
+    gaps = reduce_to_grid(
+        missing, proj, ee.Reducer.mean(), intermediate_scale_m=100.0
+    )
+    counted = gaps.gt(0).selfMask().reduceRegion(
         reducer=ee.Reducer.count(), geometry=geom, crs=proj,
         scale=proj.nominalScale(), maxPixels=int(1e9),
     )

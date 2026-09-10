@@ -20,6 +20,7 @@ import pandas as pd
 
 from src.data.gee_io import (
     ROOT,
+    provenance,
     schema_fingerprint,
     atomic_write,
     fetch_features,
@@ -49,7 +50,7 @@ IMAGES_PER_MONTH = 1
 EXPECTED_SCHEMA = [
     "cell_id", "date", "month",
     # monthly aggregates - correct as MONTHLY_AGGR provides them
-    "t2m_c", "precip_era5_mm", "pet_era5_mm", "pet_era5_raw_m",
+    "t2m_c", "precip_era5_mm", "pet_era5_mm", "pet_era5_raw_mm",
     "swvl1", "swvl2", "swvl3", "swvl4",
     # FAO-56 inputs derived from DAILY_AGGR - see DAILY_SOURCE below
     "t2m_max_c", "t2m_min_c", "dewpoint_c", "wind10m_ms", "wind2m_ms",
@@ -102,6 +103,19 @@ BASIN_MEAN_T2M_PLAUSIBLE_C = (8.0, 14.0)
 # they must not match - only agree in magnitude and covary between years. This is
 # the anchor that catches a unit or accumulation misreading (either would be off by
 # a factor of ~30), and it is also a reportable finding.
+# Potential evaporation is positive almost everywhere almost always, but not
+# strictly: see the sign-convention check in export_year.
+# PROVISIONAL - both are placeholders, not measurements.
+# Observed so far, from ONE year (1983): 0.065% non-positive, minimum -0.53 mm.
+# These bounds are 30x and 10x looser than that, which is the same mistake as the
+# 1000 mm ceiling in T2: loose enough to pass any realistic error. They are set
+# wide on purpose because one year is not the distribution - a colder year could
+# bring December and February in too. TIGHTEN THEM at the close of T3, from the
+# 45-year distribution recorded in the manifests (pet_nonpositive_rows,
+# pet_min_mm), to roughly 3x the observed maximum.
+PET_POSITIVE_MIN_SHARE = 0.98
+PET_MIN_PLAUSIBLE_MM = -5.0
+
 MAX_PRECIP_DIVERGENCE = 0.35
 MIN_PRECIP_CORRELATION = 0.70
 
@@ -159,8 +173,8 @@ def month_image(config: dict[str, Any], era5: "ee.ImageCollection", start: "ee.D
     # ERA5 fluxes are positive downward, so evaporation is negative. The raw value
     # is carried alongside the converted one so the sign convention is testable
     # rather than assumed: pet_era5_mm must come out positive.
-    pet_raw = src.select(bands["pet_mm"]).rename("pet_era5_raw_m")
-    pet = pet_raw.multiply(-1000).rename("pet_era5_mm")
+    pet_raw = src.select(bands["pet_mm"]).multiply(1000).rename("pet_era5_raw_mm")
+    pet = pet_raw.multiply(-1).rename("pet_era5_mm")
 
     swvl = [
         src.select(bands[f"swvl{k}"]).rename(f"swvl{k}") for k in range(1, 5)
@@ -304,12 +318,30 @@ def export_year(
             f"t2m_c outside [{lo}, {hi}] degC (min {land['t2m_c'].min():.1f}, "
             f"max {land['t2m_c'].max():.1f}) - suspect a Kelvin conversion"
         )
-    neg_pet = int((land["pet_era5_mm"] <= 0).sum())
-    if neg_pet:
+    # Sign convention, tested by proportion rather than by every row.
+    #
+    # ERA5 fluxes are positive downward, so potential evaporation arrives negative
+    # and is flipped. Requiring pet > 0 everywhere was too strict: over frozen ground
+    # in midwinter the flux genuinely reverses. Measured for 1983, all 22
+    # non-positive rows fall in January, at cells averaging 1,481 m and -6.3 degC,
+    # with values between -0.53 and -0.0 mm/month - deposition, not an error.
+    #
+    # If the convention were the other way round, essentially EVERY row would be
+    # negative, not 0.065% of them. So the test is the share, plus a bound on how
+    # negative a real frost value can plausibly get.
+    nonpositive = int((land["pet_era5_mm"] <= 0).sum())
+    positive_share = float((land["pet_era5_mm"] > 0).mean())
+    worst = float(land["pet_era5_mm"].min())
+    if positive_share < PET_POSITIVE_MIN_SHARE:
         problems.append(
-            f"{neg_pet} rows have pet_era5_mm <= 0. ERA5 fluxes are positive "
-            "downward so potential evaporation should be negative and the sign flip "
-            "should make it positive; this says the convention is the other way"
+            f"only {positive_share:.1%} of pet_era5_mm rows are positive, below "
+            f"{PET_POSITIVE_MIN_SHARE:.0%}. A handful of negatives is midwinter "
+            "deposition; this many means the sign convention is inverted"
+        )
+    if worst < PET_MIN_PLAUSIBLE_MM:
+        problems.append(
+            f"pet_era5_mm reaches {worst:.2f} mm, below {PET_MIN_PLAUSIBLE_MM} mm. "
+            "Frost deposition is a fraction of a millimetre; this is something else"
         )
     for k in range(1, 5):
         col = f"swvl{k}"
@@ -409,6 +441,9 @@ def export_year(
             "from DAILY_AGGR so the physical invariants hold."
         ),
         "wind_note": WIND_SCALAR_BIAS_NOTE,
+        "pet_nonpositive_rows": nonpositive,
+        "pet_min_mm": worst,
+        "provenance": provenance(),
         "schema_fingerprint": schema_fingerprint(EXPECTED_SCHEMA),
         "schema_columns": EXPECTED_SCHEMA,
         "resampling": "bilinear",

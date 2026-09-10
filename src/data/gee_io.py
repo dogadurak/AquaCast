@@ -178,6 +178,115 @@ def atomic_write(df: pd.DataFrame, path: Path | str, *, index: bool = False) -> 
     return path
 
 
+# --------------------------------------------------------------------------
+# resolution reduction
+# --------------------------------------------------------------------------
+# reduceResolution caps at 65,536 input pixels per output pixel. That ceiling was
+# walked into three separate times in this project - WorldCover 10 m to 0.05 deg
+# (308,000 needed), a no-data count at the same scales (360,001), and SRTM 30 m to
+# 0.05 deg (32,401) - even though the arithmetic is written down in the gee-export
+# skill. Documentation did not help, because ad-hoc diagnostic code gets written
+# without reading a skill first.
+#
+# So it is no longer documentation. Call reduce_to_grid(); a bare reduceResolution
+# is banned in this codebase, diagnostics included.
+REDUCE_MAX_PIXELS = 65535
+
+
+def reduce_to_grid(
+    image: "ee.Image",
+    target: "ee.Projection",
+    reducer: "ee.Reducer | None" = None,
+    *,
+    source_scale_m: float | None = None,
+    intermediate_scale_m: float | None = None,
+) -> "ee.Image":
+    """Aggregate `image` onto `target`, inserting an intermediate step if required.
+
+    Computes how many source pixels fall in one target pixel. Under the cap it
+    reduces directly; over it, it first reprojects to an intermediate scale chosen so
+    that both halves stay under the cap, then reduces. The intermediate step is a
+    regular subsample rather than a full aggregation - an unbiased estimator of the
+    same quantity, which is what makes the two-stage form legitimate rather than a
+    fudge. Say so wherever the result is reported.
+
+    `source_scale_m` overrides the image's own nominal scale, for computed images
+    whose reported scale is not meaningful.
+    """
+    import ee as _ee
+
+    reducer = reducer if reducer is not None else _ee.Reducer.mean()
+    src_scale = (
+        float(source_scale_m)
+        if source_scale_m is not None
+        else image.projection().nominalScale().getInfo()
+    )
+    dst_scale = target.nominalScale().getInfo()
+    ratio = (dst_scale / src_scale) ** 2
+
+    if intermediate_scale_m is not None:
+        # Pinned deliberately. The two-stage split below is free to pick a different
+        # intermediate scale, which would change the subsample and therefore the
+        # values. Where those values are already locked into an exported artefact,
+        # the caller pins the scale that produced them; changing it means re-running
+        # the stage and everything downstream of it.
+        return (
+            image.reproject(crs=target.crs(), scale=intermediate_scale_m)
+            .reduceResolution(reducer, maxPixels=REDUCE_MAX_PIXELS)
+            .reproject(target)
+        )
+
+    if ratio <= REDUCE_MAX_PIXELS:
+        return image.reduceResolution(reducer, maxPixels=REDUCE_MAX_PIXELS).reproject(target)
+
+    # Split the reduction so neither stage exceeds the cap. The geometric mean of
+    # the two scales balances them.
+    intermediate = (src_scale * dst_scale) ** 0.5
+    first = (intermediate / src_scale) ** 2
+    second = (dst_scale / intermediate) ** 2
+    if first > REDUCE_MAX_PIXELS or second > REDUCE_MAX_PIXELS:
+        raise ValueError(
+            f"cannot reduce {src_scale:.0f} m to {dst_scale:.0f} m in two stages: "
+            f"{first:.0f} and {second:.0f} pixels per pixel against a "
+            f"{REDUCE_MAX_PIXELS} cap. Subsample the source further first."
+        )
+    return (
+        image.reproject(crs=target.crs(), scale=intermediate)
+        .reduceResolution(reducer, maxPixels=REDUCE_MAX_PIXELS)
+        .reproject(target)
+    )
+
+
+def provenance() -> dict[str, Any]:
+    """Which code produced this artefact.
+
+    A schema fingerprint is NOT a provenance check. Changing ERA5's temperature
+    source from MONTHLY_AGGR to DAILY_AGGR changed the VALUES by up to 6 C while
+    leaving the columns identical - a file written before that fix has the right
+    schema and 61% inflated Tmax/Tmin, and no column check can see it. Every
+    artefact records the commit that produced it, and the panel build asserts that
+    all inputs came from one.
+    """
+    import subprocess
+
+    def _git(*args: str) -> str | None:
+        try:
+            out = subprocess.run(
+                ["git", *args], cwd=ROOT, capture_output=True, text=True, timeout=15
+            )
+            return out.stdout.strip() or None if out.returncode == 0 else None
+        except Exception:  # noqa: BLE001 - provenance must never break an export
+            return None
+
+    sha = _git("rev-parse", "HEAD")
+    dirty = _git("status", "--porcelain")
+    return {
+        "git_sha": sha,
+        "git_dirty": bool(dirty),
+        "git_dirty_files": (dirty.splitlines() if dirty else []),
+    }
+
+
 def schema_fingerprint(columns: list[str]) -> str:
     """Stable fingerprint of a file's column set.
 

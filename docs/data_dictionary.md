@@ -238,6 +238,35 @@ ERA5-Land classifies those cells as land. Recorded because T4 would otherwise ha
 had to guess, and because a future ERA5 version could change it. Nothing is filled
 and nothing is dropped.
 
+### `pet_era5_mm` is NOT the project's PET — and it is not clamped
+
+ERA5-Land's `potential_evaporation` is **not** a potential evapotranspiration in the
+FAO-56 sense. ECMWF documents it as **open-water (pan) evaporation** applied to a
+hypothetical surface, and notes that "the definitions of potential and reference
+evapotranspiration may vary according to the scientific application". Measured here it
+runs about 1,500–1,600 mm/yr, against a typical FAO-56 ET₀ of 1,100–1,300 mm/yr for
+this basin.
+
+So it is kept as a **comparison column only**. SPEI uses the FAO-56 Penman-Monteith
+ET₀ computed from the DAILY_AGGR inputs. Quantifying the gap between the two is a
+model-card finding, in the same spirit as the CHIRPS bias figure.
+
+Because it is not the primary quantity, **it is not clamped**: `pet_era5_mm` is the
+raw ERA5 value with the sign flipped, and `pet_era5_raw_mm` carries the unflipped
+value so the convention stays auditable in the data itself.
+
+**It can be slightly negative, and that is correct.** Over frozen ground in midwinter
+the computed flux reverses — deposition rather than evaporation. Measured for 1983:
+22 rows of 33,840 (0.065%), all in January, at cells averaging 1,481 m and −6.3 °C,
+ranging −0.53 to −0.0 mm/month. The export therefore tests the **sign convention by
+proportion** — an inverted convention would flip essentially every row, not 0.065% —
+rather than asserting positivity row by row.
+
+**FAO-56 ET₀ will need the same decision.** Penman-Monteith can go slightly negative
+when net radiation is negative and the vapour-pressure deficit is small — winter, snow,
+high albedo. FAO-56 practice is to clamp ET₀ at zero. When that column is computed it
+will be clamped, with a `*_clamped` flag, and the raw value retained.
+
 ### Units and sign conventions
 
 | Column | Source band | Conversion |

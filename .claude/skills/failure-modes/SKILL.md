@@ -335,13 +335,73 @@ Make silent corruption impossible. Accept rework.
   the combination was not.
 - **DEFENCE:** Any set of quantities related by an inequality or an identity must
   come from **one** source and one aggregation route. And assert the relation:
-  `tmin <= tmean <= tmax`, `dewpoint <= temperature`. These hold everywhere on Earth
-  in every month, so they cannot fire on consistent data, but they break instantly on
-  a swapped band, a misapplied unit, or mixed sources. That is a far stronger test
-  than any plausibility band, and it needs no external reference — the best kind of
-  assertion this project has found.
+  `tmin <= tmean <= tmax`, `dewpoint <= temperature`. Those two break instantly on a
+  swapped band, a misapplied unit, or mixed sources, and need no external reference.
 - Corollary: products from the same family are not interchangeable just because they
   share a grid and a name. Check, do not assume.
+
+### An invariant is only as valid as the source's *documented definition*
+
+An earlier version of this entry claimed physical invariants "cannot fire on correct
+data". That is false, and the next entry to be written proved it within the hour.
+
+`pet > 0` looks like physics. It is not physics for ERA5's `pev`: the ECMWF
+documentation defines it as **open-water (pan) evaporation applied to a hypothetical
+surface**, notes that "the definitions of potential and reference evapotranspiration
+may vary according to the scientific application", and says **nothing at all about a
+sign convention or a lower bound**. Over frozen ground the computed flux reverses and
+`pev` goes slightly negative. The assertion was derived from the *name* of the
+quantity, not from its definition, and it cost hours as a false alarm.
+
+This is the second time the same root cause has bitten: the 417 mm ceiling in T2 came
+the same way — a bound reasoned from what a quantity is *called* rather than from what
+the product *documents*.
+
+> **Read the source's definition of a variable before bounding it. An invariant
+> inferred from a name is an assumption, not an invariant. A bound written from
+> intuition produces more false alarms than real catches.**
+
+And when the documented definition does permit the edge case, test the **proportion**
+rather than every row: if the sign convention were inverted, essentially every row
+would flip, not 0.065% of them.
+
+## 22. A schema check mistaken for a provenance check
+**Class:** silent corruption
+
+- **SYMPTOM:** Files pass every structural test. Same columns, same row counts, same
+  fingerprint. The numbers inside were produced by different code.
+- **MECHANISM:** Changing ERA5's temperature source from MONTHLY_AGGR to DAILY_AGGR
+  altered the **values** by up to 6 °C while leaving the **schema** untouched. A year
+  file written before that fix is structurally indistinguishable from one written
+  after, and carries Tmax/Tmin inflated by 61%. The schema fingerprint added in T2 —
+  itself a good idea — cannot see this, and reasoning like "those files came from the
+  run after the fix, I remember" is memory, not evidence.
+- **DEFENCE:** Every artefact records the commit that produced it, plus whether the
+  working tree was dirty at the time (a dirty tree means the SHA does not identify
+  the code). The panel build asserts that **all inputs share one provenance** and
+  stops otherwise. When provenance for an existing file cannot be established, delete
+  and refetch: the cost is minutes, the risk of keeping it is the whole panel.
+
+## 23. The third repeat is an interface problem, not a memory problem
+**Class:** process
+
+- **SYMPTOM:** The same mistake, a third time, with the rule already written down in a
+  skill file that was read at least twice.
+- **MECHANISM:** `reduceResolution`'s 65,536-pixel ceiling was walked into three
+  times — WorldCover 10 m → 0.05° (308,000 needed), a no-data count at the same scales
+  (360,001), SRTM 30 m → 0.05° (32,401). The arithmetic was documented in the
+  `gee-export` skill throughout. Documentation does not reach ad-hoc diagnostic code,
+  which is exactly where the rule gets forgotten, because nobody opens a skill before
+  writing a throwaway probe.
+- **DEFENCE:** **Stop documenting it and make the misuse impossible.** The rule now
+  lives in `gee_io.reduce_to_grid()`, which computes the ratio and inserts an
+  intermediate stage itself; a bare `reduceResolution` is banned in this codebase,
+  diagnostics included.
+- Generalise: *after the third repeat, stop writing prose and change the interface.*
+  Prose is a request for vigilance, and vigilance is what has already failed twice.
+- Where existing values are locked into a shipped artefact, the helper takes a pinned
+  parameter so the refactor is value-identical — verified here by re-running T1 and
+  getting 2,395 / 2,130 cells exactly, which kept 45 years of CHIRPS export valid.
 
 ---
 

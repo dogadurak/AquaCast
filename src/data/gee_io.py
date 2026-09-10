@@ -316,10 +316,18 @@ def provenance(producers: list[str] | None = None) -> dict[str, Any]:
 
     producers = producers or []
     files = [ROOT / rel for rel in producers]
+    dirty_paths = [line[3:].strip() for line in (dirty.splitlines() if dirty else [])]
+    # "The tree was dirty" is too blunt to act on: an edit to a skill file or to
+    # CLAUDE.md cannot change exported values. What matters is whether any PRODUCING
+    # file was uncommitted. Measured case: CHIRPS 1982 was written with
+    # .claude/skills/... and CLAUDE.md modified, and its producer digest matches the
+    # other 44 years exactly.
+    producers_dirty = sorted(set(dirty_paths) & set(producers))
     return {
         "git_sha": sha,
         "git_dirty": bool(dirty),
-        "git_dirty_files": (dirty.splitlines() if dirty else []),
+        "git_dirty_files": dirty_paths,
+        "producers_dirty": producers_dirty,
         "code_tree": code,
         "producers": producers,
         "producer_digest": _digest_files(files) if files else None,

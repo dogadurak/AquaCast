@@ -96,9 +96,15 @@ def zero_diagnostics(df: pd.DataFrame, value_col: str = "precip_chirps_mm") -> t
 
     Returns (per-month diagnostics, total cells in artefact-like clusters).
     """
+    # Group by DATE, not by calendar month. Grouping by month is correct only when
+    # the frame holds a single year, which it does inside the exporter - and silently
+    # wrong when the same helper is reused on the whole panel, where one "month" group
+    # holds 45 years and dict(zip(cell_id, value)) collapses 126,900 rows onto 2,820
+    # keys, keeping whichever year happened to come last. It reported zero isolated
+    # cells across the entire panel and raised nothing.
     diagnostics: list[dict] = []
     total_isolated = 0
-    for month, sub in df.groupby("month"):
+    for date, sub in df.groupby("date"):
         values = dict(zip(sub["cell_id"].astype("int64"), sub[value_col]))
         zeros = {c for c, v in values.items() if v == 0}
         if not zeros:
@@ -140,7 +146,8 @@ def zero_diagnostics(df: pd.DataFrame, value_col: str = "precip_chirps_mm") -> t
 
         total_isolated += len(isolated)
         diagnostics.append({
-            "month": int(month),
+            "date": str(date)[:10],
+            "month": int(pd.Timestamp(date).month),
             "n_zero": len(zeros),
             "n_clusters": len(clusters),
             "n_isolated": len(isolated),

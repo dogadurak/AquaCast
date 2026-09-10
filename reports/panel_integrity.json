@@ -1,0 +1,269 @@
+{
+  "generated_utc": "2026-09-10T16:56:21+00:00",
+  "provenance_of_this_build": {
+    "git_sha": "f9caa9c188acc43ab4663bfc21aeed95827ad544",
+    "git_dirty": true,
+    "git_dirty_files": [
+      "rc/data/build_panel.py",
+      "src/data/export_chirps.py",
+      "src/data/gee_io.py",
+      "reports/panel_integrity.json"
+    ],
+    "producers_dirty": [
+      "src/data/gee_io.py"
+    ],
+    "code_tree": {
+      "src": "d2f95f2ee26cd67ed22443c8a3d8d148ce640082",
+      "config": "db476d30e5dfaaaa5d76d27a1cf863df201a3951"
+    },
+    "producers": [
+      "src/data/build_panel.py",
+      "src/data/gee_io.py",
+      "config/data.yaml"
+    ],
+    "producer_digest": "da219846e0ef76f6"
+  },
+  "source_provenance": {
+    "chirps": {
+      "producer_digests": [
+        "c2d8954362c72959"
+      ],
+      "git_shas": [
+        "46352e0deda3e8087dd2e3c03d576beb77bd13c5",
+        "8e5f6cc6f6c92724f97c2c3fa83894cc640578bb",
+        "c84d2df776ea962ea5b575ddf39bafceaaf43ff0",
+        "f9caa9c188acc43ab4663bfc21aeed95827ad544"
+      ],
+      "years_with_dirty_producers": 0
+    },
+    "era5": {
+      "producer_digests": [
+        "81764ab0c90ee3ac"
+      ],
+      "git_shas": [
+        "b99ad51679c4d0d36149142a0d8e9cdc816bb893",
+        "f4afaf4e046d9f3e93df451225091a7fad1a7b14"
+      ],
+      "years_with_dirty_producers": 0
+    }
+  },
+  "rows": 1522800,
+  "cells": 2820,
+  "months": 540,
+  "date_range": [
+    "1981-01-01",
+    "2025-12-01"
+  ],
+  "columns": [
+    "cell_id",
+    "date",
+    "month",
+    "precip_chirps_mm",
+    "n_pentads",
+    "n_obs",
+    "t2m_c",
+    "precip_era5_mm",
+    "pet_era5_mm",
+    "pet_era5_raw_mm",
+    "swvl1",
+    "swvl2",
+    "swvl3",
+    "swvl4",
+    "t2m_max_c",
+    "t2m_min_c",
+    "dewpoint_c",
+    "wind10m_ms",
+    "wind2m_ms",
+    "srad_down_mj_m2_day",
+    "net_solar_mj_m2_day",
+    "net_thermal_mj_m2_day",
+    "surface_pressure_kpa",
+    "era5_native_lon",
+    "era5_native_lat",
+    "n_images",
+    "era5_native_cell_id",
+    "lon",
+    "lat",
+    "i",
+    "j",
+    "crop_frac_2021",
+    "in_hydrobasins",
+    "in_akarcay_lobe",
+    "precip_zero_isolated"
+  ],
+  "null_counts": {
+    "cell_id": 0,
+    "date": 0,
+    "month": 0,
+    "precip_chirps_mm": 0,
+    "n_pentads": 0,
+    "n_obs": 0,
+    "t2m_c": 0,
+    "precip_era5_mm": 0,
+    "pet_era5_mm": 0,
+    "pet_era5_raw_mm": 0,
+    "swvl1": 0,
+    "swvl2": 0,
+    "swvl3": 0,
+    "swvl4": 0,
+    "t2m_max_c": 0,
+    "t2m_min_c": 0,
+    "dewpoint_c": 0,
+    "wind10m_ms": 0,
+    "wind2m_ms": 0,
+    "srad_down_mj_m2_day": 0,
+    "net_solar_mj_m2_day": 0,
+    "net_thermal_mj_m2_day": 0,
+    "surface_pressure_kpa": 0,
+    "era5_native_lon": 0,
+    "era5_native_lat": 0,
+    "n_images": 0,
+    "era5_native_cell_id": 0,
+    "lon": 0,
+    "lat": 0,
+    "i": 0,
+    "j": 0,
+    "crop_frac_2021": 0,
+    "in_hydrobasins": 0,
+    "in_akarcay_lobe": 0
+  },
+  "key_value_digests": {
+    "chirps.precip_chirps_mm": "2fcb3d3e08eb6d11",
+    "chirps.n_pentads": "b420c994494c3bdc",
+    "chirps.n_obs": "b420c994494c3bdc",
+    "era5.t2m_c": "4abdc464c148e9a9",
+    "era5.precip_era5_mm": "0efea9dce2b877ba",
+    "era5.pet_era5_mm": "6243fa0213e61a47",
+    "era5.pet_era5_raw_mm": "be6fc0daf7da656f",
+    "era5.swvl1": "36d06651a688886b",
+    "era5.swvl2": "c53f45d335403eb5",
+    "era5.swvl3": "9f4fec977baa0cef",
+    "era5.swvl4": "a7ba53a017c55fd3",
+    "era5.t2m_max_c": "e008ebd510a7f868",
+    "era5.t2m_min_c": "b6bcd1da48212d89",
+    "era5.dewpoint_c": "e0aa956a1adb0909",
+    "era5.wind10m_ms": "10781f2e38a8466b",
+    "era5.wind2m_ms": "f79c2ef35ec6f732",
+    "era5.srad_down_mj_m2_day": "6a9410c3394d6716",
+    "era5.net_solar_mj_m2_day": "b57e6b76cc860746",
+    "era5.net_thermal_mj_m2_day": "949d52af364e6fea",
+    "era5.surface_pressure_kpa": "dc05c91dca0437e5",
+    "era5.era5_native_lon": "1fc171d2e76f2457",
+    "era5.era5_native_lat": "29b79558aa9d9a2c",
+    "era5.n_images": "2bade667492c937c",
+    "era5.era5_native_cell_id": "3fb240ce800ceb54"
+  },
+  "digest_note": "Computed on each source before the join and on the panel after it, both ordered by (cell_id, date). Equality proves every value is bound to the same key in both, without performing or trusting a join. Full coverage, not a sample - see failure-modes 24.",
+  "precip_zero_isolated_rows": 529,
+  "stratified_sample": [
+    {
+      "cell_id": 426000438,
+      "date": "1981-01-01",
+      "in_hydrobasins": true,
+      "precip_chirps_mm_panel": 114.08975410461426,
+      "precip_chirps_mm_source": 114.08975410461426,
+      "t2m_c_panel": 1.0989074210119156,
+      "t2m_c_source": 1.0989074210119156
+    },
+    {
+      "cell_id": 424800422,
+      "date": "1981-01-01",
+      "in_hydrobasins": false,
+      "precip_chirps_mm_panel": 104.4773015975952,
+      "precip_chirps_mm_source": 104.4773015975952,
+      "t2m_c_panel": 0.7255305891472403,
+      "t2m_c_source": 0.7255305891472403
+    },
+    {
+      "cell_id": 426000438,
+      "date": "1981-07-01",
+      "in_hydrobasins": true,
+      "precip_chirps_mm_panel": 8.647210359573364,
+      "precip_chirps_mm_source": 8.647210359573364,
+      "t2m_c_panel": 23.215113962536066,
+      "t2m_c_source": 23.215113962536066
+    },
+    {
+      "cell_id": 424800422,
+      "date": "1981-07-01",
+      "in_hydrobasins": false,
+      "precip_chirps_mm_panel": 16.057822049479,
+      "precip_chirps_mm_source": 16.057822049479,
+      "t2m_c_panel": 22.946583299646136,
+      "t2m_c_source": 22.946583299646136
+    },
+    {
+      "cell_id": 426000438,
+      "date": "2003-01-01",
+      "in_hydrobasins": true,
+      "precip_chirps_mm_panel": 40.43152809143066,
+      "precip_chirps_mm_source": 40.43152809143066,
+      "t2m_c_panel": 3.843834590777533,
+      "t2m_c_source": 3.843834590777533
+    },
+    {
+      "cell_id": 424800422,
+      "date": "2003-01-01",
+      "in_hydrobasins": false,
+      "precip_chirps_mm_panel": 48.695068359375,
+      "precip_chirps_mm_source": 48.695068359375,
+      "t2m_c_panel": 3.5534538082482072,
+      "t2m_c_source": 3.5534538082482072
+    },
+    {
+      "cell_id": 426000438,
+      "date": "2003-07-01",
+      "in_hydrobasins": true,
+      "precip_chirps_mm_panel": 4.162783890962601,
+      "precip_chirps_mm_source": 4.162783890962601,
+      "t2m_c_panel": 22.96261233905216,
+      "t2m_c_source": 22.96261233905216
+    },
+    {
+      "cell_id": 424800422,
+      "date": "2003-07-01",
+      "in_hydrobasins": false,
+      "precip_chirps_mm_panel": 5.398711740970612,
+      "precip_chirps_mm_source": 5.398711740970612,
+      "t2m_c_panel": 22.69287966992681,
+      "t2m_c_source": 22.69287966992681
+    },
+    {
+      "cell_id": 426000438,
+      "date": "2025-01-01",
+      "in_hydrobasins": true,
+      "precip_chirps_mm_panel": 6.3836705684661865,
+      "precip_chirps_mm_source": 6.3836705684661865,
+      "t2m_c_panel": 3.7373790437765138,
+      "t2m_c_source": 3.7373790437765138
+    },
+    {
+      "cell_id": 424800422,
+      "date": "2025-01-01",
+      "in_hydrobasins": false,
+      "precip_chirps_mm_panel": 8.407544136047363,
+      "precip_chirps_mm_source": 8.407544136047363,
+      "t2m_c_panel": 3.109030175832004,
+      "t2m_c_source": 3.109030175832004
+    },
+    {
+      "cell_id": 426000438,
+      "date": "2025-07-01",
+      "in_hydrobasins": true,
+      "precip_chirps_mm_panel": 5.362707257270813,
+      "precip_chirps_mm_source": 5.362707257270813,
+      "t2m_c_panel": 26.45175574205689,
+      "t2m_c_source": 26.45175574205689
+    },
+    {
+      "cell_id": 424800422,
+      "date": "2025-07-01",
+      "in_hydrobasins": false,
+      "precip_chirps_mm_panel": 9.06705129146576,
+      "precip_chirps_mm_source": 9.06705129146576,
+      "t2m_c_panel": 26.316350346149648,
+      "t2m_c_source": 26.316350346149648
+    }
+  ],
+  "sample_note": "Human-readable evidence only. The gate is key_value_digests."
+}

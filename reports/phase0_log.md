@@ -177,3 +177,35 @@ derinlesmek; titizlik sonucu erteleyen bir forma burunebilir.
       provenans KOD AGACI hash'i (ham SHA degil), satir sayisi tam 1.522.800
 - [ ] T5'te: FAO-56 ET0 sifirda kirpilacak + *_clamped bayragi
 - [ ] T5'te: kok bolgesi nemi DERINLIK AGIRLIKLI 0.07/0.21/0.72, duz ortalama YASAK
+
+## T4 - panel birlestirme (tamamlandi)
+durum: OK
+artefakt: data/processed/panel_monthly.parquet (1.522.800 satir x 35 kolon,
+  227.2 MB), reports/panel_integrity.json
+assert: hepsi gecti, uc kusur bulunup duzeltildikten sonra.
+  - provenans: chirps digests=[tek deger] shas=4 dirty_producers=0
+               era5   digests=[tek deger] shas=2 dirty_producers=0
+  - tarih/hucre KUME esitligi (chirps vs era5 vs grid): True
+  - outer join, satir: beklenen 1.522.800 -> gercek 1.522.800
+  - deger checksum (join yapmadan, kaynak vs panel): 24 kolon, 0 uyusmazlik
+  - precip_zero_isolated: beklenen 529 -> gercek 529
+sure: ~40 dk (ilk kosu + uc kusur + duzeltme)
+surpriz: ilk kosu "hepsi OK" bastı ama UC AYRI KUSUR ta$iyordu, hicbiri
+  hata firlatmadi:
+  (1) provenans check'i `problems` listesini dolduruyordu ama hic `ok`'a
+      baglanmamisti - assert var, KAPI yoktu. ERA5 manifest'lerinde
+      producer_digest hic yoktu (mekanizma sonradan eklendi) ve bu sessizce
+      gecti. Git nesnelerinden geriye donuk hesaplanip damgalandi.
+  (2) git_dirty bayragi COK KABA: CHIRPS 1982 ".claude/skills/... ve
+      CLAUDE.md degisti" diye kirli isaretlenmisti ama bunlar URETICI
+      DOSYA degil - producer_digest 44 digerinden farksizdi. Bayrak artik
+      SADECE producers listesindeki dosyalar degistiyse ateşliyor.
+  (3) zero_diagnostics() panelde `groupby("month")` ile cagrilinca 45 yili
+      TEK takvim ayina eziyordu (126.900 satir -> 2.820 anahtar, dict son
+      yili tutuyordu), 0 izole hucre bulup sessizce gecti. groupby("date")
+      olarak duzeltildi - export'ta (tek yil) ve panelde (45 yil) ayni
+      davranisi verir.
+acik varsayim: yok - T4'un tum acik maddeleri (tarih/hucre kume esitligi,
+  outer join, provenans kod agaci) bu kosuda kapatildi.
+sonraki: T5 (SPI hesaplama) - hedef tanimi onceki oturumda karara baglandi:
+  SPI-3 birincil, SPI-1 ikincil+takvim-ayi-bazinda. Kapsam BUYUMEYECEK.

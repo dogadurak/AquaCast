@@ -93,7 +93,13 @@ def check_provenance(manifests: list[dict[str, Any]], source: str, problems: lis
         )
         return {"missing": missing}
     digests = {p.get("producer_digest") for p in provs}
-    dirty = [p["git_sha"] for p in provs if p.get("git_dirty")]
+    if digests == {None}:
+        problems.append(
+            f"{source}: manifests carry no producer_digest, so the producing code is "
+            "unidentified. Backfill it from git for clean runs, or re-export - not an "
+            "exception"
+        )
+    dirty = [p["git_sha"] for p in provs if p.get("producers_dirty")]
     if len(digests) != 1:
         problems.append(
             f"{source}: {len(digests)} distinct producer digests {digests}. Years were "
@@ -101,12 +107,12 @@ def check_provenance(manifests: list[dict[str, Any]], source: str, problems: lis
         )
     if dirty:
         problems.append(
-            f"{source}: {len(dirty)} years produced from a dirty working tree"
+            f"{source}: {len(dirty)} years produced with an uncommitted PRODUCING file"
         )
     return {
         "producer_digests": sorted(d for d in digests if d),
         "git_shas": sorted({p["git_sha"] for p in provs}),
-        "dirty_years": len(dirty),
+        "years_with_dirty_producers": len(dirty),
     }
 
 
@@ -160,12 +166,19 @@ def build() -> pd.DataFrame:
     }
     for name, info in prov.items():
         print(f"  {name}: digests={info.get('producer_digests')} "
-              f"shas={len(info.get('git_shas', []))} dirty={info.get('dirty_years')}")
+              f"shas={len(info.get('git_shas', []))} "
+              f"dirty_producers={info.get('years_with_dirty_producers')}")
+    # THE GATE. Collecting problems and never testing them is how this check passed
+    # while one source had no producer digest at all.
+    ok_prov = not problems
+    for problem in problems:
+        print(f"  [MISMATCH] {problem}")
 
     print("\nKeys:")
     n_cells = len(grid)
     n_months = chirps["date"].nunique()
-    ok = report("cells in grid", n_cells, n_cells)
+    ok = ok_prov
+    ok &= report("cells in grid", n_cells, n_cells)
     ok &= report("distinct dates, chirps", n_months, chirps["date"].nunique())
     ok &= report("distinct dates, era5", n_months, era5["date"].nunique())
     # Set equality, not count equality: two sources can hold 540 dates each and
@@ -217,13 +230,18 @@ def build() -> pd.DataFrame:
     print(f"             ({len(before)} columns hashed across {len(panel):,} rows)")
 
     # Derived at panel stage, not present in the raw export - see the data dictionary.
-    diag, isolated_total = zero_diagnostics(
-        panel.assign(month=panel["date"].dt.month), "precip_chirps_mm"
-    )
-    isolated_ids = {c for d in diag for c in d["isolated_cell_ids"]}
-    panel["precip_zero_isolated"] = (
-        panel["cell_id"].isin(isolated_ids) & (panel["precip_chirps_mm"] == 0)
-    )
+    diag, isolated_total = zero_diagnostics(panel, "precip_chirps_mm")
+    # Key on (cell_id, date), not cell_id alone: a cell flagged in one month is not
+    # flagged in every month it ever appears.
+    flagged = {
+        (cell, d["date"]) for d in diag for cell in d["isolated_cell_ids"]
+    }
+    panel["precip_zero_isolated"] = [
+        (c, str(t)[:10]) in flagged
+        for c, t in zip(panel["cell_id"], panel["date"])
+    ]
+    ok &= report("isolated rows match the diagnostic", isolated_total,
+                 int(panel["precip_zero_isolated"].sum()))
     print(f"\n  precip_zero_isolated: {int(panel['precip_zero_isolated'].sum()):,} rows "
           f"flagged (DERIVED here, not in the raw export)")
 

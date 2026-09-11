@@ -1,0 +1,92 @@
+{
+  "generated_utc": "2026-09-11T10:42:26+00:00",
+  "provenance": {
+    "git_sha": "300a3b575931aeaefab39ff46d58df4f13e6d580",
+    "git_dirty": true,
+    "git_dirty_files": [
+      "reports/training_summary.json",
+      "src/features/build.py",
+      "src/models/train.py"
+    ],
+    "producers_dirty": [
+      "src/models/train.py"
+    ],
+    "code_tree": {
+      "src": "771b9f61740c41da53a40a41d93bfb1e00f4f40e",
+      "config": "d4841d9421911ea5ee9e9814f5705a6456b98bb0"
+    },
+    "producers": [
+      "src/models/train.py",
+      "config/model.yaml"
+    ],
+    "producer_digest": "eeaa86af086206ac"
+  },
+  "train_period": [
+    "2001-01-01",
+    "2016-12-31"
+  ],
+  "validation_period": [
+    "2018-01-01",
+    "2020-12-31"
+  ],
+  "test_period": [
+    "2022-01-01",
+    "2025-12-31"
+  ],
+  "n_features": 38,
+  "feature_columns": [
+    "precip_chirps_mm_lag1",
+    "precip_chirps_mm_lag2",
+    "precip_chirps_mm_lag3",
+    "precip_chirps_mm_lag6",
+    "spi_1_lag1",
+    "spi_1_lag2",
+    "spi_1_lag3",
+    "spi_1_lag6",
+    "spi_3_lag1",
+    "spi_3_lag2",
+    "spi_3_lag3",
+    "spi_3_lag6",
+    "t2m_c_lag1",
+    "t2m_c_lag2",
+    "t2m_c_lag3",
+    "t2m_c_lag6",
+    "swvl1_lag1",
+    "swvl1_lag2",
+    "swvl1_lag3",
+    "swvl1_lag6",
+    "swvl2_lag1",
+    "swvl2_lag2",
+    "swvl2_lag3",
+    "swvl2_lag6",
+    "swvl3_lag1",
+    "swvl3_lag2",
+    "swvl3_lag3",
+    "swvl3_lag6",
+    "swvl4_lag1",
+    "swvl4_lag2",
+    "swvl4_lag3",
+    "swvl4_lag6",
+    "pet_era5_mm_lag1",
+    "pet_era5_mm_lag2",
+    "pet_era5_mm_lag3",
+    "pet_era5_mm_lag6",
+    "month_sin",
+    "month_cos"
+  ],
+  "targets": {
+    "spi_3": {
+      "objective": "binary:logistic",
+      "n_train": 541440,
+      "n_val": 101520,
+      "n_test": 126900
+    },
+    "spi_1": {
+      "objective": "reg:squarederror",
+      "n_train": 541440,
+      "n_val": 101520,
+      "n_test": 132540
+    }
+  },
+  "note": "Phase 0 feature set only - no MODIS, no SPEI, no C3S. spi_3@+3 tests PROJECT_SPEC.md Problem 2 directly: local lagged variables are not expected to forecast 3 months out. A model that fails to beat the baselines here is the predicted, reportable outcome, not a defect."
+}

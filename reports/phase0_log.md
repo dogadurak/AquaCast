@@ -318,3 +318,44 @@ maliyetini azaltmak icin: bundan sonra boyle bir soru gelirse once bu log
 girdisine ve ilgili commit SHA'larina (d4936de, c6f6d62, c84d2df) isaret
 edilecek, sifirdan grep yerine.
 sonraki: T7 - src/models/train.py
+
+## T7 - XGBoost (tamamlandi)
+durum: OK
+artefakt: data/processed/predictions.parquet (1.545.360 satir), src/features/build.py
+  (feature insasi, mimari nedenle src/models/ yerine buraya tasindi),
+  reports/training_summary.json
+assert: hepsi gecti.
+  - future-reference kaniti (sentinel testi): gelecekten sizinti yok
+  - split satir sayilari (hucre x ay formulu): train/val/test ucu de birebir
+  - train'in son etiketi (lead kaydirmali) validation'dan once kaliyor
+  - gap uzunlugu en uzun lead'i (+3) kapsiyor
+  - test doneminde spi_3 null: 0 (warm-up etkisi 1981'de, test'e degmiyor)
+  - spi_3: actual ikili {0,1}, prediction [0,1] olasilik - AYRI kontrol
+sure: ~35 dk (iki gercek bug + bir kalibrasyon adimi dahil)
+surpriz: T8'e gecmeden yapilan saglama kontrolunde IKI gercek bug bulundu,
+  ikisi de kod hatasi:
+  (1) siniflandirma hedefinde (spi_3) cikti tablosuna `actual` olarak HAM SPI
+      degeri yaziliyordu, oysa egitim ve prediction ikili gostergeye (y_all,
+      SPI<-1) gore yapiliyordu. Egitimin kendisi dogruydu, sadece raporlama
+      kolonu yanlisti - T8'in AUC/Brier hesabini sessizce bozacakti. actual
+      artik y_all (karsilastirilabilir buyukluk), actual_raw_spi ayri kolon.
+      Yeni bir assert eklendi: siniflandirma hedefinde actual ikili, prediction
+      [0,1] icinde.
+  (2) XGBoost early_stopping_rounds OLMADAN 300 agaci kosulsuzca fit ediyordu.
+      Ilk kosuda spi_1 RMSE (1.07) test doneminin kendi ortalamasindan (std=
+      0.898) bile kotu cikti - train donemine (2001-2016) asiri uyup iklimi
+      farkli test donemine (2022-2025, en kurak yil 2025 dahil) kotu genelleme
+      yapiyordu. early_stopping_rounds=20 eklendi (validation setine gore) -
+      bu bir hiperparametre aramasi degil, "calisan sikici" TEK konfigurasyon
+      karari. Sonrasinda RMSE 1.03'e dustu.
+  Kalan durum arastirildi, bug degil: XGBoost (1.033) climatology'yi (0.917,
+  DOGRU kiyas noktasi - 1981-2016'dan fit) hafifce geçemiyor ama persistence'tan
+  (1.165) iyi - tutarli bir siralama. Ilk "trivial ortalamadan kotu" alarmi
+  test doneminin KENDI ortalamasiyla kiyaslamaktan kaynakliydi, adil bir
+  karsilastirma degildi; climatology dogru kiyas noktasi.
+acik varsayim: yok. Faz 0'in kisitli feature seti (MODIS/SPEI/C3S yok) ile
+  spi_3@+3 spec'in Problem 2 uyarisini test ediyor - ilk bakis: AUC 0.4847
+  (rastgeleden kotu), Brier model 0.1968 vs climatology 0.1851 (model daha
+  kotu). Bu beklenen, raporlanabilir sonuc. Tam skill tablosu T8'de.
+sonraki: T8 (skill tablosu + /leakage-audit + /phase-gate) - Faz 0'in KAPI
+  sorusunun cevabi

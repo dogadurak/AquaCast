@@ -1,26 +1,21 @@
 {
-  "generated_utc": "2026-09-11T15:35:23+00:00",
+  "generated_utc": "2026-09-11T20:48:45+00:00",
   "provenance": {
-    "git_sha": "53ddf2686b50dd43c82199973c39611b89fcbddc",
+    "git_sha": "fbb58d26e283658d6fee6938173aa85c701e22d2",
     "git_dirty": true,
     "git_dirty_files": [
-      "onfig/model.yaml",
-      "reports/baselines_summary.json",
-      "reports/phase0_log.md",
-      "src/eval/skill.py",
-      "src/features/build.py",
-      "src/models/baselines.py"
+      "eports/baselines_summary.json"
     ],
     "producers_dirty": [],
     "code_tree": {
-      "src": "acd385df73e3b6d183761c695ac300d53db50530",
-      "config": "05073d5941e7b1146cad2d4d32968a1442647786"
+      "src": "16e5371434ace174098ee352fe3fd560554ef4dd",
+      "config": "c1968044dbd25b78455ba457f93f86d503bed7fe"
     },
     "producers": [
       "src/models/train.py",
       "config/model.yaml"
     ],
-    "producer_digest": "30962d8c64722914"
+    "producer_digest": "f3db372e61ede6c3"
   },
   "train_period": [
     "2001-01-01",

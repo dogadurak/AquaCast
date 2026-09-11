@@ -1,0 +1,244 @@
+{
+  "generated_utc": "2026-09-11T20:49:03+00:00",
+  "git_sha": "fbb58d26e283658d6fee6938173aa85c701e22d2",
+  "provenance": {
+    "git_sha": "fbb58d26e283658d6fee6938173aa85c701e22d2",
+    "git_dirty": true,
+    "git_dirty_files": [
+      "eports/baselines_summary.json",
+      "reports/training_summary.json"
+    ],
+    "producers_dirty": [],
+    "code_tree": {
+      "src": "16e5371434ace174098ee352fe3fd560554ef4dd",
+      "config": "c1968044dbd25b78455ba457f93f86d503bed7fe"
+    },
+    "producers": [
+      "src/eval/skill.py",
+      "config/model.yaml"
+    ],
+    "producer_digest": "663c6dd944c1d7b5"
+  },
+  "analysis_population_cells": 1823,
+  "test_period": [
+    "2022-01-01",
+    "2025-12-31"
+  ],
+  "aggregation": "per_forecast_date_then_mean",
+  "tables": [
+    {
+      "target": "spi_3",
+      "lead_months": 3,
+      "kind": "classification",
+      "rows": [
+        {
+          "auc": 0.47676874387205614,
+          "brier": 0.2051548027727674,
+          "method": "model",
+          "n_dates": 45,
+          "n_dates_auc": 35,
+          "n_dates_dropped_entirely": 0,
+          "n_dates_auc_undefined": 10,
+          "dates_auc_undefined": [
+            "2022-04-01",
+            "2022-07-01",
+            "2023-01-01",
+            "2023-05-01",
+            "2023-06-01",
+            "2023-07-01",
+            "2023-08-01",
+            "2024-03-01",
+            "2024-09-01",
+            "2025-03-01"
+          ]
+        },
+        {
+          "auc": 0.5129104627996043,
+          "brier": 0.19490309014445054,
+          "method": "climatology",
+          "n_dates": 45,
+          "n_dates_auc": 35,
+          "n_dates_dropped_entirely": 0,
+          "n_dates_auc_undefined": 10,
+          "dates_auc_undefined": [
+            "2022-04-01",
+            "2022-07-01",
+            "2023-01-01",
+            "2023-05-01",
+            "2023-06-01",
+            "2023-07-01",
+            "2023-08-01",
+            "2024-03-01",
+            "2024-09-01",
+            "2025-03-01"
+          ],
+          "model_bss": -0.05259902560148699,
+          "significance": {
+            "n_paired": 45,
+            "mean_diff_model_minus_baseline": 0.010251712628316863,
+            "p_ttest": 0.013737256212980484,
+            "p_wilcoxon": 0.07816240664453744,
+            "p_sign": 0.23269319190831084,
+            "sign_wins_model": 18,
+            "sign_n_decisive": 45,
+            "lag1_autocorr": 0.5088191583277315
+          }
+        },
+        {
+          "auc": 0.4825990391908457,
+          "brier": 0.19546992543339461,
+          "method": "persistence",
+          "n_dates": 45,
+          "n_dates_auc": 35,
+          "n_dates_dropped_entirely": 0,
+          "n_dates_auc_undefined": 10,
+          "dates_auc_undefined": [
+            "2022-04-01",
+            "2022-07-01",
+            "2023-01-01",
+            "2023-05-01",
+            "2023-06-01",
+            "2023-07-01",
+            "2023-08-01",
+            "2024-03-01",
+            "2024-09-01",
+            "2025-03-01"
+          ],
+          "model_bss": -0.04954663648589186,
+          "significance": {
+            "n_paired": 45,
+            "mean_diff_model_minus_baseline": 0.009684877339372839,
+            "p_ttest": 0.01481440863790529,
+            "p_wilcoxon": 0.11733161098788969,
+            "p_sign": 0.765991824244793,
+            "sign_wins_model": 21,
+            "sign_n_decisive": 45,
+            "lag1_autocorr": 0.528795789026148
+          }
+        },
+        {
+          "auc": 0.5129104627996043,
+          "brier": 0.19490309014445054,
+          "method": "known_accumulation",
+          "n_dates": 45,
+          "n_dates_auc": 35,
+          "n_dates_dropped_entirely": 0,
+          "n_dates_auc_undefined": 10,
+          "dates_auc_undefined": [
+            "2022-04-01",
+            "2022-07-01",
+            "2023-01-01",
+            "2023-05-01",
+            "2023-06-01",
+            "2023-07-01",
+            "2023-08-01",
+            "2024-03-01",
+            "2024-09-01",
+            "2025-03-01"
+          ],
+          "model_bss": -0.05259902560148699,
+          "significance": {
+            "n_paired": 45,
+            "mean_diff_model_minus_baseline": 0.010251712628316863,
+            "p_ttest": 0.013737256212980484,
+            "p_wilcoxon": 0.07816240664453744,
+            "p_sign": 0.23269319190831084,
+            "sign_wins_model": 18,
+            "sign_n_decisive": 45,
+            "lag1_autocorr": 0.5088191583277315
+          }
+        },
+        {
+          "method": "c3s_raw",
+          "auc": NaN,
+          "brier": NaN,
+          "n_dates": 0,
+          "model_bss": null
+        }
+      ]
+    },
+    {
+      "target": "spi_1",
+      "lead_months": 1,
+      "kind": "regression",
+      "rows": [
+        {
+          "mae": 0.7296410970535999,
+          "rmse": 0.8298163912840244,
+          "r2": -3.615494311194107,
+          "method": "model",
+          "n_dates": 47
+        },
+        {
+          "mae": 0.6987672859072949,
+          "rmse": 0.791459695680757,
+          "r2": -3.442905374248003,
+          "method": "climatology",
+          "n_dates": 47,
+          "model_skill_rmse": -0.04846323295120625,
+          "model_skill_mae": -0.044183252091170466,
+          "r2_diff_vs_model": -0.172588936946104,
+          "significance": {
+            "n_paired": 47,
+            "mean_diff_model_minus_baseline": 0.03087381114630514,
+            "p_ttest": 0.30262428048601087,
+            "p_wilcoxon": 0.1047121143994616,
+            "p_sign": 0.03998605682605215,
+            "sign_wins_model": 16,
+            "sign_n_decisive": 47,
+            "lag1_autocorr": 0.0979397083148541
+          }
+        },
+        {
+          "mae": 0.8903683984626155,
+          "rmse": 1.0278173790206566,
+          "r2": -9.582287715967563,
+          "method": "persistence",
+          "n_dates": 47,
+          "model_skill_rmse": 0.19264218700533653,
+          "model_skill_mae": 0.18051775162566508,
+          "r2_diff_vs_model": 5.9667934047734565,
+          "significance": {
+            "n_paired": 47,
+            "mean_diff_model_minus_baseline": -0.1607273014090155,
+            "p_ttest": 0.06526589537082242,
+            "p_wilcoxon": 0.02097554342526564,
+            "p_sign": 0.03998605682605215,
+            "sign_wins_model": 31,
+            "sign_n_decisive": 47,
+            "lag1_autocorr": -0.0633098107280794
+          }
+        },
+        {
+          "mae": 0.6987672859072949,
+          "rmse": 0.791459695680757,
+          "r2": -3.442905374248003,
+          "method": "known_accumulation",
+          "n_dates": 47,
+          "model_skill_rmse": -0.04846323295120625,
+          "model_skill_mae": -0.044183252091170466,
+          "r2_diff_vs_model": -0.172588936946104,
+          "significance": {
+            "n_paired": 47,
+            "mean_diff_model_minus_baseline": 0.03087381114630514,
+            "p_ttest": 0.30262428048601087,
+            "p_wilcoxon": 0.1047121143994616,
+            "p_sign": 0.03998605682605215,
+            "sign_wins_model": 16,
+            "sign_n_decisive": 47,
+            "lag1_autocorr": 0.0979397083148541
+          }
+        },
+        {
+          "method": "c3s_raw",
+          "mae": NaN,
+          "rmse": NaN,
+          "r2": NaN,
+          "n_dates": 0,
+          "model_skill_rmse": null,
+          "model_skill_mae": null
+        }
+      ]
+    }
+  ]
+}

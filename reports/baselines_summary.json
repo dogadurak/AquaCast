@@ -1,22 +1,17 @@
 {
-  "generated_utc": "2026-09-11T16:41:17+00:00",
+  "generated_utc": "2026-09-11T20:50:36+00:00",
   "provenance": {
-    "git_sha": "c3e55b9b62e958fbb1efee4ff7ea6d0cc80e109e",
+    "git_sha": "fbb58d26e283658d6fee6938173aa85c701e22d2",
     "git_dirty": true,
     "git_dirty_files": [
-      "onfig/model.yaml",
-      "reports/baselines_summary.json",
-      "reports/skill_table.md",
-      "src/eval/skill.py",
-      "src/models/baselines.py",
-      "reports/metrics_20260911T163956Z.json"
+      "eports/baselines_summary.json",
+      "reports/training_summary.json",
+      "reports/metrics_20260911T204903Z.json"
     ],
-    "producers_dirty": [
-      "src/models/baselines.py"
-    ],
+    "producers_dirty": [],
     "code_tree": {
-      "src": "2181136627e700c5a5cd044dc72c28a1c89454df",
-      "config": "ac993e0a2813e9bb66d04c8730e9554bf4dfc7b9"
+      "src": "16e5371434ace174098ee352fe3fd560554ef4dd",
+      "config": "c1968044dbd25b78455ba457f93f86d503bed7fe"
     },
     "producers": [
       "src/models/baselines.py",

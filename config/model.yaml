@@ -55,7 +55,26 @@ baselines:
   - climatology
   - persistence
   - known_accumulation      # the anti-leakage control - mandatory
-  - c3s_raw                 # tier 2 only
+  - c3s_raw                 # tier 2 only - not yet available, see c3s_raw_status below
+
+c3s_raw_status:
+  # C3S is not silently dropped from the skill table when unavailable - CLAUDE.md
+  # rule 1 forbids a bare metric, but omitting the row entirely is its own kind of
+  # concealment. The row always exists; its value is null with this reason attached.
+  available: false
+  reason: "CDS access pending - see reports/phase0_log.md open items (list B)"
+
+known_accumulation_note: >
+  For every approved (target, lead) pair in PROJECT_SPEC.md section 4.1, overlap
+  with the observed accumulation window is zero (k - L = 0 for spi_1@+1, spi_3@+3,
+  sm_anom@+1, ndvi_anom@+1). Under zero overlap, known-accumulation has nothing
+  observed to condition on and reduces exactly to climatology - so the two columns
+  in the skill table being numerically identical is the expected, designed
+  consequence of section 4.1 (Problem 1's fix), not a bug or a duplicated
+  computation. Verified independently rather than assumed: see
+  tests/test_leakage.py::test_known_accumulation_baseline_matches_climatology_numerically.
+  If a future (target, lead) pair has nonzero overlap, this note and that test's
+  expectation both stop applying and must be revised together.
 
 model:
   primary: xgboost

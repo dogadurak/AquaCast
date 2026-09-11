@@ -1,0 +1,46 @@
+{
+  "generated_utc": "2026-09-11T10:22:42+00:00",
+  "provenance": {
+    "git_sha": "16a64f137a9367a77dbef10ab2378229145da99c",
+    "git_dirty": true,
+    "git_dirty_files": [
+      "src/models/baselines.py"
+    ],
+    "producers_dirty": [
+      "src/models/baselines.py"
+    ],
+    "code_tree": {
+      "src": "26b0238c20d908fff2896237f9b913ec060c85d7",
+      "config": "d4841d9421911ea5ee9e9814f5705a6456b98bb0"
+    },
+    "producers": [
+      "src/models/baselines.py",
+      "config/model.yaml",
+      "config/data.yaml"
+    ],
+    "producer_digest": "1a83361acd9461a2"
+  },
+  "fit_period": [
+    1981,
+    2016
+  ],
+  "targets": [
+    {
+      "name": "spi_3",
+      "lead_months": 3,
+      "accumulation_months": 3,
+      "overlap": 0
+    },
+    {
+      "name": "spi_1",
+      "lead_months": 1,
+      "accumulation_months": 1,
+      "overlap": 0
+    }
+  ],
+  "known_accumulation_note": "For every approved (target, lead) pair in PROJECT_SPEC.md section 4.1, overlap with the observed accumulation window is zero (k - L = 0 for spi_1@+1, spi_3@+3, sm_anom@+1, ndvi_anom@+1). Under zero overlap, known-accumulation has nothing observed to condition on and reduces exactly to climatology - so the two columns in the skill table being numerically identical is the expected, designed consequence of section 4.1 (Problem 1's fix), not a bug or a duplicated computation. Verified independently rather than assumed: see tests/test_leakage.py::test_known_accumulation_baseline_matches_climatology_numerically. If a future (target, lead) pair has nonzero overlap, this note and that test's expectation both stop applying and must be revised together.",
+  "c3s_raw_status": {
+    "available": false,
+    "reason": "CDS access pending - see reports/phase0_log.md open items (list B)"
+  }
+}

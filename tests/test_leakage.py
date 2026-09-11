@@ -208,22 +208,48 @@ def test_no_future_features():
 
 
 def test_known_accumulation_baseline_matches_climatology_numerically():
-    """The structural tripwire above, verified against the real implementations."""
+    """The structural tripwire above, verified against the real implementations.
+
+    Signature note: this test was first written in T0, before src/models/baselines.py
+    existed, assuming climatology_forecast(target, lead) would read the panel itself.
+    T6 built it with the panel as an explicit argument instead - the same discipline
+    as src/features/spi.py's fit_start/fit_end split - so that a leakage bug (fitting
+    on the full series instead of the reference period) is a different function call,
+    not a silently wrong default. Updated here to match, not to weaken the check: it
+    still compares the two independent code paths on the real panel.
+    """
     baselines = pytest.importorskip(
         "src.models.baselines",
         reason="baselines not implemented yet (Phase 0 step 4)",
     )
     import numpy as np
+    import pandas as pd
+
+    panel_path = ROOT / "data" / "processed" / "panel_monthly.parquet"
+    if not panel_path.exists():
+        pytest.skip("panel not built yet (run src.data.build_panel)")
+    panel = pd.read_parquet(panel_path)
+    panel["date"] = pd.to_datetime(panel["date"])
+
+    baseline_cfg = DATA_CFG["climatology"]["baseline_precip_era5"]
+    fit_start = int(str(baseline_cfg["start"])[:4])
+    fit_end = int(str(baseline_cfg["end"])[:4])
 
     for target in MODEL_CFG["targets"]:
         name, lead = target["name"], target["lead_months"]
-        clim = np.asarray(baselines.climatology_forecast(name, lead), dtype=float)
-        known = np.asarray(baselines.known_accumulation_forecast(name, lead), dtype=float)
+        if name not in panel.columns:
+            continue  # not yet computed (e.g. sm_anom is Phase 2) - nothing to check
+        k = baselines.accumulation_months(name)
+        clim = baselines.climatology_forecast(panel, name, fit_start, fit_end)
+        known = baselines.known_accumulation_forecast(
+            panel, name, lead, k, fit_start, fit_end
+        )
         np.testing.assert_allclose(
-            known,
-            clim,
+            np.asarray(known, dtype=float),
+            np.asarray(clim, dtype=float),
             rtol=0,
             atol=1e-10,
+            equal_nan=True,
             err_msg=(
                 f"{name} at lead +{lead}: the known-accumulation baseline differs from "
                 "climatology despite zero overlap - one of the two is implemented wrongly"

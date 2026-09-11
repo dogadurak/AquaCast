@@ -270,3 +270,33 @@ surpriz: iki kod hatasi, ikisi de kendi yazdigim kod:
 acik varsayim: yok. climate_indices dogrulamasi TAM SERI uzerinde (orneklem
   degil) yapildi - T4'un checksum dersi burada da uygulandi.
 sonraki: T6 (dort baseline, MODEL YAZMADAN ONCE)
+
+## T6 - dort baseline (tamamlandi)
+durum: OK
+artefakt: data/processed/baselines_monthly.parquet (3.045.600 satir = 2 hedef x
+  1.522.800), reports/baselines_summary.json
+assert: hepsi gecti.
+  - satir: beklenen 3.045.600 -> gercek 3.045.600
+  - climatology fit'i test donemine (2022+) ekilen sentinel degerden (999999)
+    ETKILENMEDI - zehirli deger ile temiz veri birebir ayni cikti
+  - persistence: elle (hucre,tarih) bakisi ile forecast[t]==actual[t-lead] dogrulandi
+  - known_accumulation == climatology (BAGIMSIZ kod yollarindan): spi_3@+3 VE
+    spi_1@+1 icin True - iki hedefte de beklenen sonuc alindi
+  - C3S satiri her hedef icin VAR, degeri null (erisim bekliyor) - sessizce
+    atlanmadi
+sure: ~20 dk
+surpriz: iki sey.
+  (1) load_config() varsayilan olarak config/data.yaml okuyor, targets/baselines
+      config/model.yaml'da - ilk kosu KeyError verdi. Iki config ayri okunacak
+      sekilde duzeltildi.
+  (2) test_known_accumulation_baseline_matches_climatology_numerically (T0'da
+      yazilmis, o zaman src.models.baselines yoktu) climatology_forecast(name,
+      lead) imzasi varsayiyordu - ben ise leakage guvenligi icin panel ve
+      fit_start/fit_end'i ACIK PARAMETRE yaptim (spi.py'deki fit/apply ayrimiyla
+      ayni disiplin). Test gercek imzaya guncellendi, kontrolun KENDISI
+      zayiflatilmadi - hala iki bagimsiz kod yolunu gercek panel uzerinde
+      karsilastiriyor. 8/10 test geciyor artik (2 skip Faz 2/3 icin dogru
+      sekilde bekliyor).
+acik varsayim: yok. sm_anom henuz panelde olmadigi icin (Faz 2) otomatik
+  filtrelendi - dogru davranis, hata degil.
+sonraki: T7 (XGBoost: spi_3 @ +3 birincil, spi_1 @ +1 ikincil)

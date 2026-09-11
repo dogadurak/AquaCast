@@ -1,0 +1,181 @@
+{
+  "generated_utc": "2026-09-11T11:19:28+00:00",
+  "git_sha": "d6c7aa22cbf799d7f9e64ccc8f1598ccd03dadfb",
+  "provenance": {
+    "git_sha": "d6c7aa22cbf799d7f9e64ccc8f1598ccd03dadfb",
+    "git_dirty": true,
+    "git_dirty_files": [
+      "onfig/model.yaml",
+      "reports/baselines_summary.json",
+      "src/models/baselines.py",
+      "reports/skill_table.md",
+      "src/eval/skill.py"
+    ],
+    "producers_dirty": [
+      "src/eval/skill.py"
+    ],
+    "code_tree": {
+      "src": "276b3be692ad12081dadd03dd2948043fa287537",
+      "config": "d4841d9421911ea5ee9e9814f5705a6456b98bb0"
+    },
+    "producers": [
+      "src/eval/skill.py",
+      "config/model.yaml"
+    ],
+    "producer_digest": "adbd8e1bbf41a6ff"
+  },
+  "analysis_population_cells": 1823,
+  "test_period": [
+    "2022-01-01",
+    "2025-12-31"
+  ],
+  "aggregation": "per_forecast_date_then_mean",
+  "tables": [
+    {
+      "target": "spi_3",
+      "lead_months": 3,
+      "kind": "classification",
+      "rows": [
+        {
+          "auc": 0.49037066953823866,
+          "brier": 0.21133335714658533,
+          "method": "model",
+          "n_dates": 35,
+          "n_dates_dropped_single_class": 10,
+          "dates_dropped_single_class": [
+            "2022-04-01",
+            "2022-07-01",
+            "2023-01-01",
+            "2023-05-01",
+            "2023-06-01",
+            "2023-07-01",
+            "2023-08-01",
+            "2024-03-01",
+            "2024-09-01",
+            "2025-03-01"
+          ]
+        },
+        {
+          "auc": 0.5129104627996043,
+          "brier": 0.203929725117328,
+          "method": "climatology",
+          "n_dates": 35,
+          "n_dates_dropped_single_class": 10,
+          "dates_dropped_single_class": [
+            "2022-04-01",
+            "2022-07-01",
+            "2023-01-01",
+            "2023-05-01",
+            "2023-06-01",
+            "2023-07-01",
+            "2023-08-01",
+            "2024-03-01",
+            "2024-09-01",
+            "2025-03-01"
+          ],
+          "bss_vs_model": -0.03630482032473581
+        },
+        {
+          "auc": 0.4825990391908456,
+          "brier": 0.3391270276624089,
+          "method": "persistence",
+          "n_dates": 35,
+          "n_dates_dropped_single_class": 10,
+          "dates_dropped_single_class": [
+            "2022-04-01",
+            "2022-07-01",
+            "2023-01-01",
+            "2023-05-01",
+            "2023-06-01",
+            "2023-07-01",
+            "2023-08-01",
+            "2024-03-01",
+            "2024-09-01",
+            "2025-03-01"
+          ],
+          "bss_vs_model": 0.3768312758694021
+        },
+        {
+          "auc": 0.5129104627996043,
+          "brier": 0.203929725117328,
+          "method": "known_accumulation",
+          "n_dates": 35,
+          "n_dates_dropped_single_class": 10,
+          "dates_dropped_single_class": [
+            "2022-04-01",
+            "2022-07-01",
+            "2023-01-01",
+            "2023-05-01",
+            "2023-06-01",
+            "2023-07-01",
+            "2023-08-01",
+            "2024-03-01",
+            "2024-09-01",
+            "2025-03-01"
+          ],
+          "bss_vs_model": -0.03630482032473581
+        },
+        {
+          "method": "c3s_raw",
+          "auc": NaN,
+          "brier": NaN,
+          "n_dates": 0,
+          "bss_vs_model": null
+        }
+      ]
+    },
+    {
+      "target": "spi_1",
+      "lead_months": 1,
+      "kind": "regression",
+      "rows": [
+        {
+          "mae": 0.7841864416050646,
+          "rmse": 0.886072319084136,
+          "r2": -4.6311596641847315,
+          "method": "model",
+          "n_dates": 47
+        },
+        {
+          "mae": 0.6987672859072949,
+          "rmse": 0.791459695680757,
+          "r2": -3.442905374248003,
+          "method": "climatology",
+          "n_dates": 47,
+          "skill_rmse_vs_model": -0.11954193488273579,
+          "skill_mae_vs_model": -0.12224263702737548,
+          "r2_diff_vs_model": -1.1882542899367285
+        },
+        {
+          "mae": 0.8903683984626155,
+          "rmse": 1.0278173790206566,
+          "r2": -9.582287715967563,
+          "method": "persistence",
+          "n_dates": 47,
+          "skill_rmse_vs_model": 0.13790879861515937,
+          "skill_mae_vs_model": 0.11925620567946205,
+          "r2_diff_vs_model": 4.951128051782832
+        },
+        {
+          "mae": 0.6987672859072949,
+          "rmse": 0.791459695680757,
+          "r2": -3.442905374248003,
+          "method": "known_accumulation",
+          "n_dates": 47,
+          "skill_rmse_vs_model": -0.11954193488273579,
+          "skill_mae_vs_model": -0.12224263702737548,
+          "r2_diff_vs_model": -1.1882542899367285
+        },
+        {
+          "method": "c3s_raw",
+          "mae": NaN,
+          "rmse": NaN,
+          "r2": NaN,
+          "n_dates": 0,
+          "skill_rmse_vs_model": null,
+          "skill_mae_vs_model": null
+        }
+      ]
+    }
+  ]
+}

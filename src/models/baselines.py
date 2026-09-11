@@ -116,6 +116,77 @@ def c3s_raw_forecast(panel: pd.DataFrame, target: str) -> pd.Series:
 
 
 # --------------------------------------------------------------------------
+# PROBABILITY-SHAPED baselines, for classification targets (spi_3: P(SPI-3 < -1)).
+#
+# T6's original climatology_forecast() returns the reference-period MEAN of the
+# raw continuous target - by SPI's own construction that averages near 0 for any
+# SPI column, ranges outside [0,1], and cannot be scored with Brier/BSS, which
+# require a genuine probability. Found while preparing T8, not before: the
+# continuous baseline is fine for spi_1's regression metrics and simply the wrong
+# shape for spi_3's classification ones. These four mirror the continuous set but
+# estimate P(target < threshold) instead of E[target].
+# --------------------------------------------------------------------------
+def probability_climatology_forecast(
+    panel: pd.DataFrame, target: str, threshold: float, fit_start: int, fit_end: int
+) -> pd.Series:
+    """Per (cell, calendar month): empirical fraction of reference-period years
+    with `target` below `threshold`.
+
+    Not the theoretical Phi(-1) = 0.1587 constant that perfect SPI standardisation
+    would imply - the empirical, per-cell-month rate, for the same reason T6's
+    continuous climatology is per-cell-month rather than a single global number:
+    it shows sampling and calibration imperfections instead of assuming them away.
+    How far this drifts from Phi(-1) is itself a gamma-fit diagnostic, reported
+    alongside the skill table rather than hidden.
+    """
+    ref = panel[(panel["date"].dt.year >= fit_start) & (panel["date"].dt.year <= fit_end)]
+    rate = ref.groupby(["cell_id", ref["date"].dt.month])[target].apply(
+        lambda s: float((s < threshold).mean())
+    )
+    rate.index.set_names(["cell_id", "month"], inplace=True)
+
+    month = panel["date"].dt.month
+    key = pd.MultiIndex.from_arrays([panel["cell_id"], month])
+    return pd.Series(rate.reindex(key).to_numpy(), index=panel.index, name=f"{target}_clim_prob")
+
+
+def probability_known_accumulation_forecast(
+    panel: pd.DataFrame, target: str, lead_months: int, accumulation_months_: int,
+    threshold: float, fit_start: int, fit_end: int,
+) -> pd.Series:
+    """Probability-space counterpart of known_accumulation_forecast - same zero-
+    overlap logic, same "independent derivation, not a shortcut" discipline."""
+    overlap = max(0, accumulation_months_ - lead_months)
+    clim_prob = probability_climatology_forecast(panel, target, threshold, fit_start, fit_end)
+    if overlap == 0:
+        return clim_prob.rename(f"{target}_known_accum_prob")
+    raise NotImplementedError(
+        f"{target} at lead {lead_months} has nonzero overlap ({overlap} months) - "
+        "the probability-space known-accumulation estimator for partial overlap is "
+        "not implemented; no approved PROJECT_SPEC 4.1 pair should reach this branch."
+    )
+
+
+def persistence_probability_forecast(
+    panel: pd.DataFrame, target: str, lead_months: int, threshold: float
+) -> pd.Series:
+    """Standard probabilistic-persistence baseline: today's state, carried forward
+    as a hard 0/1 forecast of the future state (not calibrated - a step function).
+
+    Its AUC and Brier score are expected to look coarser than a continuous
+    forecast's precisely because of this - see persistence_auc_note in
+    config/model.yaml. Not a defect; the coarseness is a documented property of
+    thresholding rather than modelling.
+    """
+    cont = persistence_forecast(panel, target, lead_months)
+    return (cont < threshold).astype(float).rename(f"{target}_persist_prob")
+
+
+def c3s_raw_probability_forecast(panel: pd.DataFrame, target: str) -> pd.Series:
+    return pd.Series(np.nan, index=panel.index, name=f"{target}_c3s_raw_prob")
+
+
+# --------------------------------------------------------------------------
 def accumulation_months(target: str) -> int:
     import re
 
@@ -124,14 +195,19 @@ def accumulation_months(target: str) -> int:
 
 
 def build_baselines_for_target(
-    panel: pd.DataFrame, target: str, lead_months: int, fit_start: int, fit_end: int,
+    panel: pd.DataFrame, target_cfg: dict[str, Any], fit_start: int, fit_end: int,
 ) -> pd.DataFrame:
+    target = target_cfg["name"]
+    lead_months = target_cfg["lead_months"]
+    kind = target_cfg["kind"]
     k = accumulation_months(target)
+
     out = pd.DataFrame(index=panel.index)
     out["cell_id"] = panel["cell_id"]
     out["date"] = panel["date"]
     out["target"] = target
     out["lead_months"] = lead_months
+    out["kind"] = kind
     out["actual"] = panel[target]
     out["climatology"] = climatology_forecast(panel, target, fit_start, fit_end)
     out["persistence"] = persistence_forecast(panel, target, lead_months)
@@ -139,6 +215,25 @@ def build_baselines_for_target(
         panel, target, lead_months, k, fit_start, fit_end
     )
     out["c3s_raw"] = c3s_raw_forecast(panel, target)
+
+    if kind == "classification":
+        threshold = target_cfg["threshold"]
+        # actual_prob mirrors T7's y_all exactly (target < threshold), so predictions
+        # and baselines compare the identical quantity - see the T7 bug this guards
+        # against: a classification target's "actual" must match what its forecasts
+        # estimate, not the raw continuous value.
+        out["actual_prob"] = (panel[target] < threshold).astype(float)
+        out["climatology_prob"] = probability_climatology_forecast(
+            panel, target, threshold, fit_start, fit_end
+        )
+        out["persistence_prob"] = persistence_probability_forecast(
+            panel, target, lead_months, threshold
+        )
+        out["known_accumulation_prob"] = probability_known_accumulation_forecast(
+            panel, target, lead_months, k, threshold, fit_start, fit_end
+        )
+        out["c3s_raw_prob"] = c3s_raw_probability_forecast(panel, target)
+
     return out
 
 
@@ -153,13 +248,12 @@ def build() -> pd.DataFrame:
     panel = pd.read_parquet(PANEL)
     panel["date"] = pd.to_datetime(panel["date"])
 
-    targets = [(t["name"], t["lead_months"]) for t in config["targets"]
-               if t["name"] in panel.columns]
+    target_cfgs = [t for t in config["targets"] if t["name"] in panel.columns]
+    targets = [(t["name"], t["lead_months"]) for t in target_cfgs]
     print(f"Reference period (fit): {fit_start}-{fit_end}")
     print(f"Targets: {targets}")
 
-    frames = [build_baselines_for_target(panel, name, lead, fit_start, fit_end)
-              for name, lead in targets]
+    frames = [build_baselines_for_target(panel, t, fit_start, fit_end) for t in target_cfgs]
     baselines = pd.concat(frames, ignore_index=True)
 
     print("\nAssertions (expected -> actual):")
@@ -199,7 +293,10 @@ def build() -> pd.DataFrame:
 
     # C: known-accumulation vs climatology, INDEPENDENT paths, exact numeric match.
     # This is the tripwire from tests/test_leakage.py, exercised directly here too.
-    for name, lead in targets:
+    # For classification targets the SAME check is repeated in probability space -
+    # a second, independently-shaped tripwire, not a rerun of the first.
+    for t_cfg in target_cfgs:
+        name, lead, kind = t_cfg["name"], t_cfg["lead_months"], t_cfg["kind"]
         k = accumulation_months(name)
         overlap = max(0, k - lead)
         sub = baselines[baselines["target"] == name]
@@ -213,10 +310,31 @@ def build() -> pd.DataFrame:
             f"{name}@+{lead}: known_accumulation == climatology (overlap={overlap})",
             expected, bool(matches),
         )
+        if kind == "classification":
+            prob_lo_hi_ok = bool(sub["climatology_prob"].between(0, 1).all())
+            ok &= report(f"{name}: climatology_prob within [0,1]", True, prob_lo_hi_ok)
+            prob_matches = np.allclose(
+                sub["known_accumulation_prob"].to_numpy(),
+                sub["climatology_prob"].to_numpy(),
+                equal_nan=True,
+            )
+            ok &= report(
+                f"{name}@+{lead}: known_accumulation_prob == climatology_prob "
+                f"(overlap={overlap})", expected, bool(prob_matches),
+            )
+            # SPI is standardised to Phi(-1) ~ 0.1587 by construction; a large drift
+            # in the empirical reference-period rate is a gamma-fit calibration
+            # signal worth surfacing, not silently absorbing.
+            theoretical = float(pd.Series([0.15866]).iloc[0])
+            empirical_mean = float(sub["climatology_prob"].mean())
+            drift = abs(empirical_mean - theoretical)
+            print(f"  [INFO    ] {name}: climatology_prob mean {empirical_mean:.4f} vs "
+                  f"theoretical Phi(-1)={theoretical:.4f} (drift {drift:+.4f}) - "
+                  "a gamma-fit calibration diagnostic, not a gate")
 
     # E: C3S row exists and is shaped null-with-reason, never silently dropped.
     c3s_status = config["c3s_raw_status"]
-    ok &= report("C3S row present for every target", set(targets_names := [t[0] for t in targets]),
+    ok &= report("C3S row present for every target", set([t[0] for t in targets]),
                  set(baselines["target"].unique()))
     ok &= report("C3S values all null (access pending)", True,
                  bool(baselines["c3s_raw"].isna().all()))
@@ -241,6 +359,7 @@ def build() -> pd.DataFrame:
                      "overlap": max(0, accumulation_months(n) - l)} for n, l in targets],
         "known_accumulation_note": config["known_accumulation_note"].strip(),
         "c3s_raw_status": c3s_status,
+        "persistence_auc_note": config["persistence_auc_note"].strip(),
     }, indent=2), encoding="utf-8")
 
     print(f"\nWrote {OUT_PARQUET.relative_to(ROOT)} ({len(baselines):,} rows)")

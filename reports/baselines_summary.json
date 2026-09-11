@@ -1,16 +1,17 @@
 {
-  "generated_utc": "2026-09-11T10:22:42+00:00",
+  "generated_utc": "2026-09-11T11:05:27+00:00",
   "provenance": {
-    "git_sha": "16a64f137a9367a77dbef10ab2378229145da99c",
+    "git_sha": "d6c7aa22cbf799d7f9e64ccc8f1598ccd03dadfb",
     "git_dirty": true,
     "git_dirty_files": [
+      "onfig/model.yaml",
       "src/models/baselines.py"
     ],
     "producers_dirty": [
       "src/models/baselines.py"
     ],
     "code_tree": {
-      "src": "26b0238c20d908fff2896237f9b913ec060c85d7",
+      "src": "276b3be692ad12081dadd03dd2948043fa287537",
       "config": "d4841d9421911ea5ee9e9814f5705a6456b98bb0"
     },
     "producers": [
@@ -18,7 +19,7 @@
       "config/model.yaml",
       "config/data.yaml"
     ],
-    "producer_digest": "1a83361acd9461a2"
+    "producer_digest": "c3bfde1363a46dad"
   },
   "fit_period": [
     1981,
@@ -42,5 +43,6 @@
   "c3s_raw_status": {
     "available": false,
     "reason": "CDS access pending - see reports/phase0_log.md open items (list B)"
-  }
+  },
+  "persistence_auc_note": "Persistence's probability forecast for a classification target is a hard 0/1 step function (today's state, carried forward unchanged) rather than a calibrated probability - see src/models/baselines.py persistence_probability_forecast. Its AUC and Brier score are therefore expected to look coarser / more discretised than a continuous forecast's. This is a property of thresholding, not a defect in the baseline."
 }

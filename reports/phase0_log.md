@@ -359,3 +359,79 @@ acik varsayim: yok. Faz 0'in kisitli feature seti (MODIS/SPEI/C3S yok) ile
   kotu). Bu beklenen, raporlanabilir sonuc. Tam skill tablosu T8'de.
 sonraki: T8 (skill tablosu + /leakage-audit + /phase-gate) - Faz 0'in KAPI
   sorusunun cevabi
+
+## T8 - skill tablosu (tamamlandi) - FAZ 0 KAPI SORUSUNUN CEVABI
+durum: OK
+artefakt: reports/skill_table.md, reports/metrics_<timestamp>.json (git SHA dahil),
+  src/models/baselines.py'a olasilik-bicimli baseline'lar eklendi (T6 reopened,
+  kullanicinin onayiyla, mimari nedenle skill.py'a degil baselines.py'a)
+
+HEADLINE SONUC (analiz populasyonu: 1.823 hucre, in_hydrobasins & ~in_akarcay_lobe
+& crop_frac>=0.5; test 2022-2025; metrikler tarih bazinda hesaplanip ORTALAMA
+alinarak ozetlendi, satir havuzlanmadi):
+
+  spi_3 @ +3 (BIRINCIL, siniflandirma, 35 gecerli tarih/45):
+    model         AUC 0.4904  Brier 0.2113
+    climatology   AUC 0.5129  Brier 0.2039   BSS(model vs bunu) = -0.036
+    persistence   AUC 0.4826  Brier 0.3391   BSS(model vs bunu) = +0.377
+    known_accum   = climatology (beklendigi gibi, overlap=0)
+    c3s_raw       N/A (CDS erisimi bekliyor)
+
+  spi_1 @ +1 (IKINCIL, regresyon, 47 tarih):
+    model         MAE 0.7842  RMSE 0.8861
+    climatology   MAE 0.6988  RMSE 0.7915   skill(RMSE) = -0.120
+    persistence   MAE 0.8904  RMSE 1.0278   skill(RMSE) = +0.138
+    known_accum   = climatology (beklendigi gibi, overlap=0)
+    c3s_raw       N/A
+
+SENTEZ: Model HER IKI hedefte de persistence'i aciyla yeniyor ama climatology'yi
+gecemiyor. spi_3@+3 icin bu PROJECT_SPEC Problem 2'nin ONCEDEN kayit altina
+alinmis, beklenen sonucu - lag-only feature'larla 3 ay oteye tahmin edilemez.
+spi_1@+1 icin bu ONCEDEN BEKLENMEYEN bir bulgu: PROJECT_SPEC 2.1 "Tier 1...
+should reach meaningful skill" diyor, ama Faz 0'in kasitli olarak minimal
+feature seti (MODIS NDVI/LST yok, derinlik-agirlikli toprak nemi anomalisi yok,
+SPEI yok) ile model climatology'yi +1 ayda bile gecemiyor. Bu Tier 1'in
+kurtarilamaz oldugu anlamina gelmez - Faz 1/2'nin tam feature seti henuz test
+edilmedi - ama Faz 1'e gecerken bu feature'larin onceligini artiran dogru,
+raporlanabilir bir negatif sonuc.
+
+FAZ 0 KAPISI (PROJECT_SPEC.md bolum 6): "a skill table exists comparing model
+vs all baselines, and the leakage audit passes" -> YAPISAL OLARAK KARSILANDI
+(tablo var, 9/10 leakage testi geciyor, kalan 1 Faz 3'u dogru sekilde bekliyor).
+ICERIK sorusu ("Tier 2 skill'i yeniyor mu") -> HAYIR, beklendigi gibi.
+
+sure: ~1.5 sa (plan + kod + UC gercek hata bulundu ve duzeltildi)
+surpriz: T8'i yazarken UC ayri, gercek hata bulundu, hicbiri "calisti" sanip
+  gecmedim:
+  (1) T6'nin climatology_forecast() SINIFLANDIRMA hedefi (spi_3) icin SUREKLI
+      SPI ortalamasi donduruyordu (araligi [-0.029,0.044], sifir civarinda) -
+      Brier/BSS hesaplamak icin KULLANILAMAZ (olasilik degil). T6 tekrar acildi
+      (kullanicinin onayiyla, dosya src/models/baselines.py'a - mimari ayrim
+      korunarak): probability_climatology_forecast() vb dort yeni fonksiyon
+      eklendi, referans donemindeki AMPIRIK altina-dusme oranini hesapliyor.
+      Kendiliginden gelen dogrulama: bu oran havza genelinde 0.1597 cikti,
+      teorik Phi(-1)=0.1587'den sadece +0.0010 sapiyor - SPI fit kalitesinin
+      bagimsiz, beklenmedik bir dogrulamasi.
+  (2) KRITIK: predictions.parquet (T7) "date" kolonunu ISSUE tarihi olarak
+      kullaniyor (actual = target[t+lead]), baselines_monthly.parquet (T6) ise
+      DOGRULAMA tarihi olarak (actual = target[t], persistence geriye bakiyor).
+      Ikisini ayni "date" filtresiyle kiyaslamak SESSIZCE yanlis tarihleri
+      esletiriyordu. Kanit: pred'in tarihini +lead kaydirinca base ile 45/45
+      BIREBIR esitlendi (once 3/48). Kalici bir assert eklendi: iki kaynagin
+      "actual" degerleri ortak tarihlerde HER ZAMAN birebir esit olmali, aksi
+      halde T8 durur. Bu calistirmada headline sayilar DEGISMEDI (T7'nin kendi
+      panel-sinir kirpmasi tesaduf eseri ayni 45 (hucre,ay) kumesini
+      koruyordu) ama duzeltme YAPISAL, sansa dayanmiyor artik.
+  (3) Duzeltme SIRASINDA bir sorun daha cikti: baseline'lar modelin HIC tahmin
+      uretmedigi 3 ekstra ayi (test'in ilk lead-ay'lari) da hesaba katiyordu -
+      adil olmayan bir kiyas. base artik SADECE pred'in kapsadigi tarihlere
+      kisitlaniyor; duzeltme sonrasi n_dates model=baseline birebir esit oldu.
+  (4) R² son derece negatif cikti (-4.6 ile -9.6 arasi) - manuel hesapla
+      sklearn'e karsi dogrulandi (birebir eslesme), bug degil: PROJECT_SPEC
+      4.4'un istedigi UZAMSAL (tarih-ici, hucreler arasi) R² tanimi, alisilan
+      ZAMANSAL R²'den cok daha cezalandirici, cunku SPI'nin tek bir ayda
+      hucreler arasi yayilimi dar (std~0.2-0.5). Tabloya aciklama notu eklendi.
+acik varsayim: yok. Reliability diagram, spatially blocked CV, permutation
+  testi B listesinde/Faz 3'te kaliyor.
+sonraki: /leakage-audit (skeptic agent - CLAUDE.md'nin "Definition of done"
+  bunu bir modelleme degisikligi icin zorunlu kiliyor), sonra /phase-gate

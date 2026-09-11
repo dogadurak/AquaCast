@@ -300,3 +300,21 @@ surpriz: iki sey.
 acik varsayim: yok. sm_anom henuz panelde olmadigi icin (Faz 2) otomatik
   filtrelendi - dogru davranis, hata degil.
 sonraki: T7 (XGBoost: spi_3 @ +3 birincil, spi_1 @ +1 ikincil)
+
+## T7 on-kontrol - ucuncu dogrulama, ayni sonuc
+durum: DEGISIKLIK GEREKMEDI (uc kez ayni sonuc)
+"1991-2020" ve spi1_mm_per_unit/spi3_mm_per_unit sorulari bu oturumda UCUNCU
+kez soruldu (T5 oncesi, T6 oncesi, simdi T7 oncesi). Taze grep ile yine
+dogrulandi: "1991-2020" hicbir dosyada yok (duzeltme commit d4936de), kontrat
+satirlari yerinde (commit c6f6d62). Ayrica istenen ucuncu kontrol - spi_1/spi_3
+icin 'kind' alaninin config'te ACIK olup olmadigi - dogrulandi: ikisi de acik
+(spi_3: classification, spi_1: regression, commit c84d2df'de yazilmis), ek
+islem gerekmedi.
+
+NEDEN BURAYA YAZILIYOR: ayni sorunun ucuncu kez sorulmasi, onceki iki
+dogrulamanin karsi tarafa (baska bir oturum/baglam) ulasmadigini gosteriyor.
+Cozum aksiyon degil - dosyalar zaten dogru - ama tekrar eden dogrulama
+maliyetini azaltmak icin: bundan sonra boyle bir soru gelirse once bu log
+girdisine ve ilgili commit SHA'larina (d4936de, c6f6d62, c84d2df) isaret
+edilecek, sifirdan grep yerine.
+sonraki: T7 - src/models/train.py

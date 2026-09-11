@@ -190,28 +190,50 @@ def paired_significance(model_series: pd.Series, baseline_series: pd.Series) -> 
     """Paired test of model vs baseline on the SAME per-date metric values, not on
     the two already-averaged means the table prints.
 
-    Added after the skeptic audit: every headline number in this table was a mean
-    over ~35-47 dates with no measure of whether the two methods' means are
-    distinguishable at all - "beats persistence" and "loses to climatology" were
-    both stated as if certain. A paired t-test AND Wilcoxon signed-rank (the
-    t-test's distribution-free counterpart, since n~40 and per-date errors are not
-    obviously normal) are both reported; they should roughly agree, and a
-    disagreement between them is itself worth noticing rather than picking whichever
-    gives the smaller p-value.
+    Added after the first skeptic audit: every headline number in this table was
+    a mean over ~35-47 dates with no measure of whether the two methods' means
+    are distinguishable at all. Reports THREE tests, none declared "primary" -
+    an earlier version of this function and its table footnote claimed Wilcoxon
+    should be read as the conservative, primary number because the paired
+    t-test's variance estimator is anti-conservative under positive
+    autocorrelation. The SECOND skeptic audit found that claim indefensible on
+    two counts: (1) Wilcoxon's own null variance formula assumes independent
+    differences too - a rank transform confers no special robustness to serial
+    dependence, so calling it "the conservative one" overstated what is actually
+    known; (2) the premise (positive autocorrelation) does not hold uniformly -
+    measured lag-1 autocorrelation of the paired differences varies by
+    comparison (large for spi_3 vs climatology, near zero for spi_1's rows) - and
+    applying a blanket rule regardless let the ONE comparison that happened to
+    clear 0.05 under Wilcoxon (spi_1 vs persistence, MAE) read as significant
+    while the same comparison's t-test (0.065) did not - the report's only
+    positive claim was standing on a rule invented to justify it, not on
+    evidence. Fixed by removing the "primary" framing entirely: t-test, Wilcoxon
+    and a sign test (the least assumption-heavy of the three - only uses which
+    method won each date, not the size of the gap) are reported side by side
+    with the measured autocorrelation, and the table's footnote leaves the
+    reader to judge rather than nominating a winner.
 
     WHAT THIS DOES NOT FIX, stated rather than hidden: consecutive SPI-3 forecast
     dates share up to 2 of their 3 accumulation months, so the ~35-45 test dates
-    are NOT independent draws - both tests assume independence, so these p-values
-    are optimistic (too small), not rigorous. Treat them as "is the gap even
-    plausibly bigger than noise", not as a formal significance claim.
+    are NOT independent draws - all three tests assume independence in some form,
+    so p-values here are generally optimistic (too small), not rigorous. Treat
+    them as "is the gap even plausibly bigger than noise", not as a formal
+    significance claim - and see the table's footnote for the multiple-
+    comparisons problem this function does not correct for either.
     """
     common = model_series.index.intersection(baseline_series.index)
     m = model_series.loc[common].to_numpy()
     b = baseline_series.loc[common].to_numpy()
     finite = np.isfinite(m) & np.isfinite(b)
     m, b = m[finite], b[finite]
-    if len(m) < 5 or np.allclose(m, b):
-        return {"n_paired": int(len(m)), "p_ttest": float("nan"), "p_wilcoxon": float("nan")}
+    n = len(m)
+    if n < 5 or np.allclose(m, b):
+        return {
+            "n_paired": n, "identical": bool(n >= 5 and np.allclose(m, b)),
+            "p_ttest": float("nan"), "p_wilcoxon": float("nan"), "p_sign": float("nan"),
+            "lag1_autocorr": float("nan"),
+        }
+    diff = m - b
     t_res = stats.ttest_rel(m, b)
     try:
         w_res = stats.wilcoxon(m, b)
@@ -219,11 +241,29 @@ def paired_significance(model_series: pd.Series, baseline_series: pd.Series) -> 
     except ValueError:
         # all differences zero, or too few non-zero differences - wilcoxon refuses
         p_wilcoxon = float("nan")
+    # Sign test: does the model win on more than half the dates, ignoring margin
+    # size entirely - the test least sensitive to the autocorrelation/skew
+    # issues that make the t-test and Wilcoxon disagree with each other here.
+    wins = int((diff < 0).sum())  # model_val < baseline_val = model wins (lower error/Brier)
+    ties = int((diff == 0).sum())
+    n_decisive = n - ties
+    p_sign = float(stats.binomtest(wins, n_decisive, p=0.5).pvalue) if n_decisive > 0 else float("nan")
+    # Lag-1 autocorrelation of the paired differences - the diagnostic that
+    # replaces the withdrawn "Wilcoxon is conservative" claim: report the
+    # measurement, let the reader judge, per this project's own pattern (bake in
+    # the measurement, keep the interpretation out of the code).
+    if n > 3 and np.std(diff) > 0:
+        lag1 = float(np.corrcoef(diff[:-1], diff[1:])[0, 1])
+    else:
+        lag1 = float("nan")
     return {
-        "n_paired": int(len(m)),
-        "mean_diff_model_minus_baseline": float(np.mean(m - b)),
+        "n_paired": n,
+        "mean_diff_model_minus_baseline": float(np.mean(diff)),
         "p_ttest": float(t_res.pvalue),
         "p_wilcoxon": p_wilcoxon,
+        "p_sign": p_sign,
+        "sign_wins_model": wins, "sign_n_decisive": n_decisive,
+        "lag1_autocorr": lag1,
     }
 
 
@@ -365,6 +405,22 @@ def build_target_table(
     return result
 
 
+def format_significance(sig: dict[str, Any] | None) -> str:
+    """t-test / Wilcoxon / sign-test p-values, all three, none nominated as
+    primary - see paired_significance()'s docstring for why an earlier version
+    of this table picking Wilcoxon as "the conservative one" was itself a
+    defect the second skeptic audit found."""
+    if not sig:
+        return "—"
+    if sig.get("identical"):
+        return "identical"  # distinguishable from "—" (not computed at all)
+    if np.isnan(sig.get("p_ttest", float("nan"))):
+        return "—"
+    r1 = sig.get("lag1_autocorr", float("nan"))
+    r1_s = f", r₁={r1:+.2f}" if not np.isnan(r1) else ""
+    return f"t={sig['p_ttest']:.3f} / w={sig['p_wilcoxon']:.3f} / sign={sig['p_sign']:.3f}{r1_s}"
+
+
 # --------------------------------------------------------------------------
 def render_markdown(tables: list[dict[str, Any]], config: dict[str, Any], pop_size: int) -> str:
     lines = [
@@ -390,17 +446,20 @@ def render_markdown(tables: list[dict[str, Any]], config: dict[str, Any], pop_si
             # the model", backwards from its actual meaning; the skeptic audit
             # caught this as a rendering defect, not an arithmetic one - see
             # skill_score()'s docstring. Positive = the model beats that row.
-            # "p (MAE, paired)" tests whether the model's and this row's per-date MAE
-            # series actually differ - added after the skeptic audit found every
-            # skill number here was a bare mean over ~47 dates with no test of
-            # whether it's distinguishable from noise. See paired_significance()'s
-            # docstring: n is small and dates are NOT independent (SPI-1 has no
-            # accumulation overlap, but the underlying weather is autocorrelated
-            # month to month), so read a small p as "worth taking seriously", not
-            # as a formal significance claim.
+            # "p (MAE, ...)" tests whether the model's and this row's per-date MAE
+            # series actually differ - added after the first skeptic audit found
+            # every skill number here was a bare mean with no test of whether it's
+            # distinguishable from noise. Three tests, NONE nominated as primary -
+            # see paired_significance()'s docstring for why an earlier version's
+            # "Wilcoxon is the conservative one, read it first" rule was itself
+            # withdrawn as a defect (it does not hold up statistically and, in
+            # practice, was the only thing making the table's one positive claim
+            # clear 0.05). r₁ is the measured lag-1 autocorrelation of the paired
+            # per-date differences - large where it appears, near zero elsewhere;
+            # judge each p accordingly rather than trusting a blanket rule.
             lines.append(
                 "| method | MAE | RMSE | R² | model skill (RMSE) | model skill (MAE) | "
-                "p (MAE, Wilcoxon / t-test §) | n dates |"
+                "p (MAE, t-test / Wilcoxon / sign §) | n dates |"
             )
             lines.append("|---|---|---|---|---|---|---|---|")
             for r in t["rows"]:
@@ -416,16 +475,7 @@ def render_markdown(tables: list[dict[str, Any]], config: dict[str, Any], pop_si
                 mae = r["mae"] if not np.isnan(r["mae"]) else float("nan")
                 rmse = r["rmse"] if not np.isnan(r["rmse"]) else float("nan")
                 r2 = r.get("r2", float("nan"))
-                sig = r.get("significance")
-                p_s = "—"
-                # Wilcoxon printed FIRST, t-test second: the t-test's standard error
-                # assumes independent differences, so under the positive
-                # autocorrelation this table's own footnote (§) admits, it
-                # mechanically understates the true variance and reports a smaller
-                # p than it should - the leading number is the more conservative
-                # read, not just a formatting choice.
-                if sig and not np.isnan(sig.get("p_ttest", float("nan"))):
-                    p_s = f"{sig['p_wilcoxon']:.3f} / {sig['p_ttest']:.3f}"
+                p_s = format_significance(r.get("significance"))
                 if r["method"] == "model":
                     skill_r_s = skill_m_s = "—"  # a method has no skill score against itself
                 lines.append(
@@ -444,7 +494,7 @@ def render_markdown(tables: list[dict[str, Any]], config: dict[str, Any], pop_si
             n_auc_undefined = model_row["n_dates_auc_undefined"]
             lines.append(
                 f"| method | AUC (n={n_auc}) | Brier (n={n_brier}) | model BSS | "
-                "p (Brier, Wilcoxon / t-test §) |"
+                "p (Brier, t-test / Wilcoxon / sign §) |"
             )
             lines.append("|---|---|---|---|---|")
             for r in t["rows"]:
@@ -457,11 +507,7 @@ def render_markdown(tables: list[dict[str, Any]], config: dict[str, Any], pop_si
                 if r["method"] == "persistence":
                     note += " ‡"
                 bss_s = f"{bss:+.3f}" if bss is not None and not np.isnan(bss) else "N/A"
-                sig = r.get("significance")
-                p_s = "—"
-                # Wilcoxon first - see the regression table's comment above (§).
-                if sig and not np.isnan(sig.get("p_ttest", float("nan"))):
-                    p_s = f"{sig['p_wilcoxon']:.3f} / {sig['p_ttest']:.3f}"
+                p_s = format_significance(r.get("significance"))
                 if r["method"] == "model":
                     bss_s = "—"
                 auc = r["auc"] if not np.isnan(r["auc"]) else float("nan")
@@ -489,32 +535,47 @@ def render_markdown(tables: list[dict[str, Any]], config: dict[str, Any], pop_si
         "",
         f"‡ {config['persistence_auc_note'].strip()}",
         "",
-        "§ **What the p-values do and do not establish.** Paired t-test and Wilcoxon "
-        "signed-rank, computed on the model's and each baseline's per-date metric "
-        "series aligned on the SAME test dates - not a test of the two already-"
-        "averaged means printed in the table. Both assume the paired differences "
-        "are independent across dates, which they are NOT here: consecutive test "
-        "months share autocorrelated weather (spi_3's own accumulation window "
-        "adds direct overlap between neighbouring dates on top of that). So a "
-        "p-value here is optimistic - smaller than it would be for truly "
-        "independent dates - and should be read as \"is this gap even plausibly "
-        "bigger than noise\", not as a formal significance claim. Added after the "
-        "skeptic audit found every skill number in earlier versions of this table "
-        "was a bare mean with nothing to say whether the two methods were "
-        "distinguishable at all.\n\n"
-        "**Why Wilcoxon is printed first.** The paired t-test's standard error is "
-        "built from the sample variance of the per-date differences under an "
-        "independence assumption; positive autocorrelation between dates means the "
-        "TRUE variance of the mean difference is larger than that formula computes, "
-        "so the t-test mechanically UNDERSTATES its own uncertainty and reports a "
-        "smaller p-value than a correctly-specified test would - a known, "
-        "directional bias, not a vague caveat. Wilcoxon is rank-based and does not "
-        "share that specific mechanism, though it is not immune to dependence "
-        "either - it is the more conservative of the two here, not a dependence-"
-        "corrected one. Where the two disagree (spi_3@+3 vs climatology: t=0.014, "
-        "Wilcoxon=0.078), read Wilcoxon's number as the primary one and the "
-        "t-test's as a supporting figure that likely overstates significance, not "
-        "the reverse.",
+        "§ **What the p-values do and do not establish.** Three tests, computed on "
+        "the model's and each baseline's per-date metric series aligned on the SAME "
+        "test dates - not on the two already-averaged means printed in the table - "
+        "and NONE of the three is nominated as primary. All three assume the paired "
+        "differences are independent across dates, which they are NOT here: "
+        "consecutive test months share autocorrelated weather (spi_3's own "
+        "accumulation window adds direct overlap between neighbouring dates on top "
+        "of that), so every p-value here is generally optimistic (too small), not "
+        "rigorous - read as \"is this gap even plausibly bigger than noise\", never "
+        "as a formal significance claim. r₁ is the measured lag-1 autocorrelation "
+        "of each comparison's paired differences, printed alongside so a reader can "
+        "judge how much to discount a given p rather than trusting a rule.\n\n"
+        "**A withdrawn claim, corrected rather than deleted.** An earlier version "
+        "of this table printed Wilcoxon before the t-test and told readers to treat "
+        "it as the conservative, primary number, reasoning that the t-test's "
+        "variance estimator is anti-conservative under positive autocorrelation. "
+        "The second skeptic audit found this indefensible: Wilcoxon's own null "
+        "variance formula assumes independent differences too, so a rank transform "
+        "confers no documented robustness to serial dependence - the claimed "
+        "mechanism does not single out Wilcoxon as safer. Worse, the premise "
+        "(positive autocorrelation) does not hold uniformly - r₁ is large for "
+        "spi_3 vs climatology but near zero for spi_1's rows - so the rule was "
+        "applied where its own justification did not apply. In practice it was the "
+        "only thing that put this table's one positive claim (model beats "
+        "persistence at spi_1@+1) under 0.05: Wilcoxon gives 0.021 there, the "
+        "t-test 0.065, and the sign test (the test least sensitive to "
+        "autocorrelation or skew - model wins 31 of 47 dates) 0.040 - all three "
+        "actually agree the gap is suggestive, but their p-values still span a "
+        "wide range (0.021-0.065) on the same 47 dates, which is itself the point: "
+        "no single one of the three should be quoted alone as THE p-value for this "
+        "comparison.\n\n"
+        "**Multiple comparisons, not corrected for.** Six paired tests are reported "
+        "across the two targets' baseline rows (two of the six, known_accumulation, "
+        "duplicate climatology's numbers by construction - see \\*). With six tests "
+        "and no correction, a naive 0.05 threshold understates how easily one gap "
+        "clears it by chance; a Bonferroni-adjusted threshold over four independent "
+        "comparisons would be 0.05/4 = 0.0125, which none of this table's p-values "
+        "clears on all three tests simultaneously. This project does not claim the "
+        "model beats or loses to any baseline at conventional significance - the "
+        "honest summary is that none of these gaps is established, in either "
+        "direction, at this sample size.",
         "",
         "Reliability diagrams and spatially blocked CV are Phase 3 work "
         "(reports/phase0_log.md list B), not computed here.",

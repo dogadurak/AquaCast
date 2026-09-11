@@ -167,9 +167,27 @@ def probability_known_accumulation_forecast(
     )
 
 
+def _below_threshold(series: pd.Series, threshold: float) -> pd.Series:
+    """`series < threshold`, but a missing VALUE stays missing rather than
+    silently reading as "not in drought". A bare `series < threshold` returns
+    False for NaN input (pandas/numpy comparison semantics), which found a real
+    bug in the narrow-scope skeptic audit: `persistence_probability_forecast`
+    was assigning a real-looking probability to rows where the continuous
+    `persistence` baseline correctly has no value at all (14,100 rows in 1981's
+    warm-up window carried a defined `persistence_prob` while `persistence`
+    itself was NaN). `Series.map()` already returns NaN for a key it doesn't
+    find, so keeping NaN here instead of coercing to False is enough - no
+    special-casing needed downstream.
+    """
+    out = series.astype(object)
+    out[series.isna()] = np.nan
+    out[~series.isna()] = series[~series.isna()] < threshold
+    return out
+
+
 def persistence_probability_forecast(
     panel: pd.DataFrame, target: str, lead_months: int, threshold: float,
-    fit_start: int, fit_end: int,
+    fit_start: int, fit_end: int, fit_population_cell_ids: set[int] | None = None,
 ) -> pd.Series:
     """Calibrated persistence: P(target < threshold, `lead_months` ahead | target <
     threshold `lead_months` AGO - i.e. what was known at issue time), estimated
@@ -197,24 +215,48 @@ def persistence_probability_forecast(
     regardless of what a "row" represents in an external table, then estimate
     P(future state | current state) from those pairs.
 
-    FIT BASIN-WIDE, not per (cell, calendar month): a 2-state transition table per
-    cell-month would split the fit period's ~36 years into buckets some cells never
-    see a drought month in (undefined transition), which is worse than the coarse
-    hard-0/1 baseline it replaces. One pooled pair of rates (P(future|now=below),
-    P(future|now=above)) needs the whole reference period's sample size and stays a
-    genuinely naive baseline - it does not use cell identity or season, exactly like
-    the persistence it calibrates.
+    FIT BASIN-WIDE among ANALYSIS-POPULATION cells only, not per (cell, calendar
+    month): a 2-state transition table per cell-month would split the fit period's
+    ~36 years into buckets some cells never see a drought month in (undefined
+    transition). Restricted to `fit_population_cell_ids` when given - the second
+    narrow-scope skeptic audit found the first version pooled across the FULL
+    2,820-cell panel, mixing in the Taurus-flank boundary ring that
+    src/eval/skill.py's own docstring says "would corrupt every metric" if mixed
+    with the 1,823-cell analysis population; small in magnitude here
+    (0.1583/0.1695 basin-wide vs 0.1567/0.1736 population-only) but a real
+    violation of that axiom, not a rounding note. `climatology_forecast` does not
+    need this parameter: it fits PER CELL, so a ring cell's own mean never enters
+    an analysis cell's forecast regardless of which cells are in the input frame -
+    only a POOLED fit like this one can leak across cells this way.
 
-    Fit strictly on [fit_start, fit_end] (same discipline as climatology_forecast),
-    applied unchanged to validation and test.
+    FIT STRICTLY on [fit_start, fit_end] means BOTH ends of each (now, now+lead)
+    pair fall inside it - not just the "now" end. The first version of this
+    function filtered only on "now"'s year, so pairs whose "now" fell in
+    1981-2016's last `lead_months` reached their "future" value into 2017+ (8,460
+    of 1,218,240 fit pairs for spi_3@+3, found by the second skeptic audit - not
+    a validation/test leak, since 2017 is `gap_1`, but a false claim: the
+    docstring said "strictly" and the code did not enforce it). Fixed by
+    requiring the FUTURE date's year to also fall within [fit_start, fit_end].
     """
     ordered = panel.sort_values(["cell_id", "date"]).reset_index(drop=True)
-    state_now = ordered[target] < threshold
+    state_now = _below_threshold(ordered[target], threshold)
     future_val = ordered.groupby("cell_id")[target].shift(-lead_months)
-    state_future = future_val < threshold
+    state_future = _below_threshold(future_val, threshold)
+    future_date = ordered["date"] + pd.DateOffset(months=lead_months)
 
-    ref_mask = (ordered["date"].dt.year >= fit_start) & (ordered["date"].dt.year <= fit_end)
-    fit = pd.DataFrame({"now": state_now, "future": state_future.astype(float)})[ref_mask].dropna()
+    ref_mask = (
+        (ordered["date"].dt.year >= fit_start) & (future_date.dt.year <= fit_end)
+    )
+    if fit_population_cell_ids is not None:
+        # By CELL_ID membership, not by aligning a mask to `ordered`'s row index -
+        # `ordered` is `panel.sort_values(["cell_id","date"]).reset_index(drop=True)`,
+        # a fresh 0..N-1 index that no longer corresponds to panel's own row
+        # positions, so reindexing a panel-indexed mask onto it would silently
+        # misalign (a bug caught while writing this fix, before it shipped).
+        ref_mask = ref_mask & ordered["cell_id"].isin(fit_population_cell_ids)
+    fit = pd.DataFrame({
+        "now": state_now, "future": state_future,
+    })[ref_mask].dropna().astype({"future": float})
     rate_by_state = fit.groupby("now")["future"].mean()
     if not {False, True}.issubset(set(rate_by_state.index)):
         raise AssertionError(
@@ -226,7 +268,11 @@ def persistence_probability_forecast(
 
     # APPLICATION uses the value known at ISSUE time (lead_months before this row's
     # own verification date), not this row's own value - see docstring above.
-    state_known_at_issue = persistence_forecast(panel, target, lead_months) < threshold
+    # Applied to the WHOLE panel (every exported cell, not just the analysis
+    # population) - baselines_monthly.parquet's contract is one row per
+    # (cell_id, date) regardless of which cells later get scored; only the FIT
+    # sample above is population-restricted.
+    state_known_at_issue = _below_threshold(persistence_forecast(panel, target, lead_months), threshold)
     prob = state_known_at_issue.map(rate_by_state).astype(float)
     return prob.rename(f"{target}_persist_prob")
 
@@ -245,6 +291,7 @@ def accumulation_months(target: str) -> int:
 
 def build_baselines_for_target(
     panel: pd.DataFrame, target_cfg: dict[str, Any], fit_start: int, fit_end: int,
+    fit_population_cell_ids: set[int] | None = None,
 ) -> pd.DataFrame:
     target = target_cfg["name"]
     lead_months = target_cfg["lead_months"]
@@ -276,7 +323,7 @@ def build_baselines_for_target(
             panel, target, threshold, fit_start, fit_end
         )
         out["persistence_prob"] = persistence_probability_forecast(
-            panel, target, lead_months, threshold, fit_start, fit_end
+            panel, target, lead_months, threshold, fit_start, fit_end, fit_population_cell_ids
         )
         out["known_accumulation_prob"] = probability_known_accumulation_forecast(
             panel, target, lead_months, k, threshold, fit_start, fit_end
@@ -297,12 +344,29 @@ def build() -> pd.DataFrame:
     panel = pd.read_parquet(PANEL)
     panel["date"] = pd.to_datetime(panel["date"])
 
+    # Same population axiom src/eval/skill.py's analysis_population() enforces at
+    # scoring time - now enforced at FIT time too for any baseline whose estimate
+    # is POOLED across cells (currently just persistence_probability_forecast;
+    # climatology and known-accumulation fit per cell, so they never needed this -
+    # see persistence_probability_forecast's docstring for why pooling is the
+    # difference that matters here, found by the second skeptic audit).
+    mask_cfg = data_config["grid"]["mask"]
+    pop_keep = (
+        panel["in_hydrobasins"] & ~panel["in_akarcay_lobe"]
+        & (panel["crop_frac_2021"] >= mask_cfg["min_fraction"])
+    )
+    fit_population_cell_ids = set(panel.loc[pop_keep, "cell_id"].unique())
+
     target_cfgs = [t for t in config["targets"] if t["name"] in panel.columns]
     targets = [(t["name"], t["lead_months"]) for t in target_cfgs]
     print(f"Reference period (fit): {fit_start}-{fit_end}")
     print(f"Targets: {targets}")
+    print(f"Fit population (pooled baselines only): {len(fit_population_cell_ids):,} cells")
 
-    frames = [build_baselines_for_target(panel, t, fit_start, fit_end) for t in target_cfgs]
+    frames = [
+        build_baselines_for_target(panel, t, fit_start, fit_end, fit_population_cell_ids)
+        for t in target_cfgs
+    ]
     baselines = pd.concat(frames, ignore_index=True)
 
     print("\nAssertions (expected -> actual):")
@@ -396,10 +460,10 @@ def build() -> pd.DataFrame:
             probe2 = panel.copy()
             probe2.loc[probe2["date"].dt.year >= 2022, name] = 999999.0
             poisoned_persist = persistence_probability_forecast(
-                probe2, name, lead, threshold, fit_start, fit_end
+                probe2, name, lead, threshold, fit_start, fit_end, fit_population_cell_ids
             )
             clean_persist = persistence_probability_forecast(
-                panel, name, lead, threshold, fit_start, fit_end
+                panel, name, lead, threshold, fit_start, fit_end, fit_population_cell_ids
             )
             pre_poison = panel["date"].dt.year < 2022
             ok &= report(
@@ -409,20 +473,46 @@ def build() -> pd.DataFrame:
                     poisoned_persist[pre_poison], clean_persist[pre_poison], equal_nan=True
                 )),
             )
+
+            # D2: this poison test does NOT exercise the fit-boundary-overrun bug
+            # the second skeptic audit found (D above poisons 2022+, which was
+            # already structurally excluded from the fit even before that fix) -
+            # a distinct, targeted check for the actual bug: poison the years
+            # JUST PAST fit_end (fit_end+1 .. fit_end+lead, e.g. 2017-2019 for
+            # lead=3 - inside gap_1/gap_2, never validation/test) and compare
+            # rows dated <= fit_end. Those rows' OWN application value cannot be
+            # touched by this poison (their own issue-time lookup reads
+            # date-lead <= fit_end-lead, years earlier still) - so ANY difference
+            # here can only come from the FIT reading a "future" value that
+            # reached past fit_end, which is exactly the bug.
+            boundary_years = list(range(fit_end + 1, fit_end + lead + 1))
+            probe3 = panel.copy()
+            probe3.loc[probe3["date"].dt.year.isin(boundary_years), name] = 999999.0
+            poisoned_boundary = persistence_probability_forecast(
+                probe3, name, lead, threshold, fit_start, fit_end, fit_population_cell_ids
+            )
+            clean_boundary = persistence_probability_forecast(
+                panel, name, lead, threshold, fit_start, fit_end, fit_population_cell_ids
+            )
+            in_fit_window = panel["date"].dt.year <= fit_end
+            ok &= report(
+                f"persistence_prob[{name}] fit does not reach past {fit_end} "
+                f"(poisoned {boundary_years}, the exact overrun the second skeptic "
+                "audit found)",
+                True, bool(np.allclose(
+                    poisoned_boundary[in_fit_window], clean_boundary[in_fit_window],
+                    equal_nan=True,
+                )),
+            )
+
             prob_lo_hi_ok2 = bool(sub["persistence_prob"].dropna().between(0, 1).all())
             ok &= report(f"{name}: persistence_prob within [0,1]", True, prob_lo_hi_ok2)
-            # `sub["actual_prob"]` is (panel[target] < threshold) at THIS row's own
-            # date - i.e. the "now" state persistence_probability_forecast conditions
-            # on - already aligned to sub's own row order. Pulling a fresh mask from
-            # `panel` here would mismatch: `sub` came out of a `pd.concat(...,
-            # ignore_index=True)` across targets, so its index labels are not
-            # panel's, only its row order is (this cost a rewrite to find).
-            #
             # NOT `sub["actual_prob"]` - that is the VERIFICATION-date state (the
             # answer being forecast), and persistence_prob is keyed on the
             # ISSUE-time state (`persistence_forecast(...) < threshold`, lead
-            # months earlier) after the AUC-1.0 leak fix above. Recomputed directly
-            # here, aligned to `sub` by row order (see the note two lines up).
+            # months earlier). `sub` came out of a `pd.concat(..., ignore_index=
+            # True)` across targets, so its index labels are not panel's, only its
+            # ROW ORDER is - recomputed and aligned by position, not by index label.
             issue_state = (persistence_forecast(panel, name, lead) < threshold).to_numpy()
             state_now_ref = pd.Series(issue_state, index=sub.index)
             rate_when_below = float(sub.loc[state_now_ref, "persistence_prob"].mode().iloc[0])

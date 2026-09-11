@@ -1,32 +1,29 @@
 {
-  "generated_utc": "2026-09-11T15:38:45+00:00",
+  "generated_utc": "2026-09-11T16:41:17+00:00",
   "provenance": {
-    "git_sha": "53ddf2686b50dd43c82199973c39611b89fcbddc",
+    "git_sha": "c3e55b9b62e958fbb1efee4ff7ea6d0cc80e109e",
     "git_dirty": true,
     "git_dirty_files": [
       "onfig/model.yaml",
       "reports/baselines_summary.json",
-      "reports/phase0_log.md",
       "reports/skill_table.md",
-      "reports/training_summary.json",
       "src/eval/skill.py",
-      "src/features/build.py",
       "src/models/baselines.py",
-      "reports/metrics_20260911T153546Z.json"
+      "reports/metrics_20260911T163956Z.json"
     ],
     "producers_dirty": [
       "src/models/baselines.py"
     ],
     "code_tree": {
-      "src": "acd385df73e3b6d183761c695ac300d53db50530",
-      "config": "05073d5941e7b1146cad2d4d32968a1442647786"
+      "src": "2181136627e700c5a5cd044dc72c28a1c89454df",
+      "config": "ac993e0a2813e9bb66d04c8730e9554bf4dfc7b9"
     },
     "producers": [
       "src/models/baselines.py",
       "config/model.yaml",
       "config/data.yaml"
     ],
-    "producer_digest": "fa5facc4debaa66a"
+    "producer_digest": "51d1dade27ef8391"
   },
   "fit_period": [
     1981,
@@ -51,5 +48,5 @@
     "available": false,
     "reason": "CDS access pending - see reports/phase0_log.md open items (list B)"
   },
-  "persistence_auc_note": "Persistence's probability forecast is CALIBRATED, not a hard 0/1 step function: P(target < threshold, lead months ahead | target < threshold now), fit basin-wide on the reference period and applied unchanged - see src/models/baselines.py persistence_probability_forecast. A hard 0/1 form was used through the first T8 run; the skeptic audit found it was a quadratic-scoring-rule worst case that inflated \"model beats persistence\" from a real margin into mostly an artefact of an uncalibrated baseline (Brier BSS +0.377 hard-0/1 vs +0.0003 calibrated on spi_3@+3 - see reports/phase0_log.md). AUC is still coarser than a continuous forecast's because the basin-wide fit yields only two distinct probability values (one per current state) rather than a per-cell continuum - that remaining coarseness is a property of pooling for sample size, not of thresholding, and not a defect."
+  "persistence_auc_note": "Persistence's probability forecast is CALIBRATED, not a hard 0/1 step function: P(target < threshold, lead months ahead | target < threshold lead-months-ago, the value known at issue time), fit basin-wide on the reference period and applied unchanged - see src/models/baselines.py persistence_probability_forecast. A hard 0/1 form was used through the first T8 run; the skeptic audit found it was a quadratic-scoring-rule worst case that inflated \"model beats persistence\" from a real margin into mostly an artefact of an uncalibrated baseline. Recalibrating moved spi_3@+3's model_bss (the model's Brier Skill Score against persistence, see src/eval/skill.py skill_score) from +0.377 (hard 0/1) to -0.050 (calibrated, after also fixing two more issues the second skeptic audit found: a small fit-boundary overrun and the fit pooling across cells outside the analysis population - see reports/phase0_log.md for both). Either way the model does not beat a properly calibrated persistence at this target, which the hard-0/1 baseline was hiding - though see the significance footnote in reports/skill_table.md: none of this table's gaps is statistically established at this sample size, in either direction. AUC is still coarser than a continuous forecast's because the basin-wide fit yields only two distinct probability values (one per current state) rather than a per-cell continuum. THRESHOLDING IS PART OF WHY, not just pooling for sample size as an earlier version of this note claimed (corrected by the second skeptic audit): `persistence_probability_forecast` binarises the CONDITIONING variable itself (today's state, above/below threshold) before estimating a rate, so even a per-cell fit would still yield exactly two values per cell - pooling removes cross-cell variation on top of that, it does not cause the two-value ceiling.\nSTATED PLAINLY, not left for a reader to notice: the two calibrated rates on the analysis population are 0.1570 and 0.1754 - 1.8 points apart, both close to the ~0.159 basin base rate. Calibrated persistence is therefore numerically close to a near-constant forecast here, not far from climatology's own row (Brier 0.1955 vs climatology's 0.1949, within 0.001) - it satisfies CLAUDE.md rule 1's \"four baselines\" formally, but it barely adds information beyond the climatology row for spi_3@+3 in this run. This does not mean persistence is the wrong baseline to compute - a target with a stronger true persistence signal would separate the two rates further - it means this specific result (SPI-3 at +3 months) is one where persistence has little to say, which is itself informative and should be read alongside the BSS number, not instead of it."
 }

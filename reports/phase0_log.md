@@ -682,3 +682,127 @@ AYNI paired-test protokolüyle yeniden olculmeli.
 
 acik varsayim: hangi p-esigi/hangi test "basari/basarisizlik" karari icin esas
 sayilacak, kullaniciyla henuz netlesmedi - Faz 1 baslamadan once cevaplanmali.
+
+---
+
+### T8 dorduncu tur: ikinci skeptic turunun 5 bulgusu duzeltildi
+
+Dar kapsamli ikinci skeptic turu (54..HEAD diff + 4 bulgunun cozumu, tam
+pipeline degil) 10 bulgu getirdi. AUC=1.0 sizinti duzeltmesini bagimsizca
+dogruladi (temiz). 5 bulgu gercek defect olarak islendi, digerleri (dead-code
+yorum tutarsizligi, "9/10" ifadesinin fazla temiz okunmasi) not olarak
+kaydedildi, kod degisikligi gerektirmedi.
+
+**(1) KRITIK - GERI CEKILEN IDDIA: "Wilcoxon once, cunku t-test'i sisiriyor"
+kurali istatistiksel olarak savunulamaz cikti VE raporun tek pozitif iddiasini
+suni sekilde ayakta tutuyordu.** Onceki turde ben (ve kullanicinin onerisiyle)
+bu kurali ekledim. Skeptic'in bulgulari: (a) Wilcoxon'un kendi sifir-hipotez
+varyans formulu de bagimsizlik varsayiyor - sira donusumu seri bagimliliga
+karsi ozel bir baginsiklik saglamiyor, iddia edilen mekanizma yanlis; (b)
+onerme (pozitif oto-korelasyon) her satirda gecerli degil - olcculdu: spi_3 vs
+climatology icin r1=+0.51 (onerme dogru), ama spi_1 vs persistence icin
+r1=-0.06 (onerme YOK) - kural yine de korusuzce uygulanmisti; (c) pratik sonuc:
+raporun TEK pozitif iddiasi (spi_1'de model persistence'i geciyor) SADECE
+Wilcoxon'un p=0.021 rakamiyla 0.05'in altina giriyordu, t-test (0.065) girmiyordu
+- yani secilen "kural" tam da onu dogrulamasi gereken sonucu urettigi icin
+secilmis gibi duruyordu.
+
+Duzeltme: "primary" cercevesi tamamen kaldirildi. Uc test paralel basiliyor
+(t-test/Wilcoxon/sign test - sign test buyukluge degil sadece hangi yontemin
+kazandigina bakiyor, en az varsayima dayanan test), olculen lag-1 oto-
+korelasyon (r1) her satirda ayri basiliyor, ve tabloya coklu-karsilastirma
+uyarisi eklendi (6 test, Bonferroni-ayarli esik 0.05/4=0.0125, HICBIR
+karsilastirma uc testte birden bu esigi gecmiyor). Yeni sonuc: spi_1 vs
+persistence icin t=0.065/w=0.021/sign=0.040 - uc test de "supheli ama kesin
+degil" diyor, hicbiri tek basina "kesinlikle anlamli" demiyor. RAPORUN ARTIK
+HICBIR YONDE ("model X'i geciyor" veya "X model'i geciyor") istatistiksel
+anlamlilik iddiasi YOK - bu, sonucu degistirmiyor, SADECE onceki turun
+kendi urettigi asiri-guvenli cerceveyi geri cekiyor.
+
+**(2) ORTA - kalibre persistence'in fit adimi referans donemin 1-3 ay
+OTESINE tasiyordu.** `ref_mask` sadece "simdi" tarihinin yilini kontrol
+ediyordu, "gelecek" (simdi+lead) tarihinin yilini degil - spi_3@+3 icin
+1,218,240 fit ciftinden 8,460'i 2017 Ocak/Subat/Mart'a (gap_1, dogrulama/test
+degil ama docstring'in "kesinlikle [fit_start,fit_end]" iddiasi yanlisti)
+uzaniyordu. Etkisi kucuk (BSS -0.0484 vs -0.0494) ama yon modelin lehine.
+Duzeltme: `ref_mask` artik HEM simdi HEM gelecek tarihinin fit araliginda
+olmasini sartkosuyor. Yeni, HEDEFE YONELIK bir assert eklendi (D2): sadece
+fit_end+1..fit_end+lead yillarini (2017-2019) zehirleyip <=fit_end tarihli
+satirlarin ETKILENMEMESI gerektigini dogruluyor - eski poison testi (D, 2022+
+zehirliyordu) bu spesifik hatayi hic yakalamiyordu, D2 hedefe yonelik.
+
+**(3) ORTA - iki committed artefakt eski/celiskili sayilar tasiyordu.**
+`reports/baselines_summary.json` (T6'nin kendi ciktisi) `persistence_auc_note`
+metnini config'i her guncelledigimde otomatik yenilemiyordu - dosyada hala
+"+0.0003" gibi hicbir yerde dogrulanmamis eski bir spekulasyon ve sizintinin
+kendi kosullandirma tanimi ("target<threshold now") vardi. Duzeltme: config
+notu her seferinde dogru sayilarla guncellenip baselines.py yeniden calistirildi.
+AYRICA: `reports/metrics_20260911T153546Z.json` gercekten SIZINTILI kosuyu
+(spi_3 persistence AUC=1.0) tasiyor - BILEREK SILINMEDI, bu turun en degerli
+kanitlarindan biri (sizintinin somut, kalici delili), ama burada ACIKCA
+isaretleniyor: bu dosya GECERSIZ bir kosunun kaydi, referans alinmamali.
+
+**(4) ORTA (gerekce istegi) - config notu "coarseness pooling'den, thresholding'den
+degil" diyordu, bu YANLIS.** `persistence_probability_forecast` kosullandirma
+degiskenini (simdiki durum) esikleme YAPARAK ikili hale getiriyor - hucre-bazli
+bir fit bile olsa yine sadece 2 deger uretirdi; pooling CAPRAZ-hucre varyansini
+kaldiriyor, 2-deger tavanini pooling degil thresholding yaratiyor. Not duzeltildi.
+AYRICA acikca yazildi: iki kalibre oran (0.1570/0.1754) birbirine cok yakin,
+climatology'ninkine (Brier 0.1949) neredeyse ozdes (0.1955) - kalibre
+persistence bu hedefte pratik olarak neredeyse ayirt edici degil, gizlenmeden
+soylendi.
+
+**(5) DUSUK-ORTA (sessiz-bozulma sinifi) - NaN degerler "esik-ustu" (False)
+olarak okunuyordu.** `NaN < esik` pandas'ta False doner, NaN degil - 14.100
+satirda (1981'in ilk 5 ayi, referans donemin ICINDE, test penceresinin
+DISINDA - bugunku metrikleri etkilemiyor ama yapisal olarak sessiz) surekli
+`persistence` sutunu NaN iken `persistence_prob` gercek gorunen bir sayi
+tasiyordu. `_below_threshold()` yardimci fonksiyonu eklendi (NaN'i NaN olarak
+tasir), hem fit hem uygulama adiminda kullanildi. Bagimsizca dogrulandi:
+14.100/14.100 satirda artik `persistence_prob` de NaN.
+
+**(EK, skeptic'in #7 bulgusu) - fit artik SADECE 1.823 hucrelik analiz
+populasyonunda yapiliyor, tam 2.820 hucrelik panelde degil.** climatology
+hucre-bazli fit yaptigi icin bu soruna hic girmiyordu (halka hucreleri asla
+baska bir hucrenin ortalamasina karismiyor); ama persistence'in HAVZA-CAPINDA
+POOLED fit'i halka hucrelerinin istatistiklerini 1.823 hucrelik populasyona
+karistiriyordu - skill.py'nin kendi ilkesinin ("halka hucreleri havzayla
+karisirsa her metrigi bozar") ihlali. `build()` artik `fit_population_cell_ids`
+hesaplayip `persistence_probability_forecast`'a geciriyor; etki kucuk
+(0.1583/0.1695 tum-panel -> 0.1570/0.1754 populasyon-only, sinir-duzeltmesiyle
+birlikte) ama ilke tutarli hale geldi.
+
+**BAGIMSIZ DOGRULAMA (ucuncu kez):** kalibre oranlar (0.1754/0.1570),
+model_bss (-0.0495 vs tablo -0.050), t/w/sign p-degerleri VE r1 oto-korelasyonu
+parquet dosyalarindan sifirdan, skill.py/baselines.py hic cagirilmadan yeniden
+uretildi - hepsi gosterilen hassasiyette eslesti. NaN-guvenligi 14.100/14.100
+satirda dogrulandi.
+
+**GUNCEL TABLO (spi_3@+3, 35/45 AUC/Brier):** model AUC 0.4768/Brier 0.2052;
+climatology 0.5129/0.1949 (BSS -0.053, t=0.014/w=0.078/sign=0.233,r1=+0.51);
+persistence 0.4826/0.1955 (BSS -0.050, t=0.015/w=0.117/sign=0.766,r1=+0.53).
+**spi_1@+1 (47 tarih):** model MAE 0.730/RMSE 0.830; climatology skill -0.048
+(t=0.303/w=0.105/sign=0.040,r1=+0.10); persistence skill +0.193
+(t=0.065/w=0.021/sign=0.040,r1=-0.06).
+
+**BASLIK, bu turden sonra en dogru hali:** Model climatology'yi hicbir hedefte,
+hicbir testte gecmiyor. Model persistence'i spi_3'te gecmiyor (BSS -0.050),
+spi_1'de belki geciyor ama uc test de "kesin degil" diyor (en dusuk p=0.021,
+Bonferroni-ayarli esigi (0.0125) hicbir testte gecmiyor). **Rapor artik hicbir
+yonde istatistiksel anlamlilik iddia etmiyor** - bu, negatif sonucu
+DEGISTIRMIYOR, sadece onceki turun "model persistence'i aciyla yeniyor"
+cercevesini geri cekiyor ve olculebilir belirsizligi gosteriyor.
+
+9/10 leakage testi hala geciyor (10.'su Faz 3'e ertelenen permutation kontrolu -
+CLAUDE.md'nin kendi "permutation_test: true" beyanina karsin henuz yok, bu
+acik bir madde olarak kaliyor).
+
+acik varsayim: SS7 boslugu (onceki tur) hala gecerli, simdi -0.048/anlamsiz
+rakamla. Hangi p-esigi/hangi test Faz 1 basari/basarisizlik kararinda esas
+sayilacak sorusu HALA netlesmedi - bu turun bulgulari (uc test farkli sonuc
+verebiliyor) bu kararin TEK BIR teste dayanmamasi gerektigini daha da
+guclendirdi.
+
+sonraki: kullaniciya bu turun ozeti raporlanacak, uçuncu bir skeptic turu
+gerekip gerekmedigi (kullaniciya soruldu, muhtemelen gerekmez - bu turun
+bulgulari kucuk/dogrulanabilir nitelikte) ve /phase-gate karari.

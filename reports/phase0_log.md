@@ -611,3 +611,74 @@ hala Faz 3'te.
 sonraki: /leakage-audit'in bu ikinci turu (skeptic'in bulgularinin duzeltilmis
 hali) gozden gecirilmeli mi, yoksa /phase-gate'e mi gecilmeli - kullaniciya
 soruldu.
+
+---
+
+### T8 ucuncu tur: bagimsiz dogrulama + p-deger yonu duzeltmesi + SS7 boslugunun GUNCEL rakamlarla yeniden yazilmasi
+
+**Bagimsiz (clean-room) dogrulama yapildi.** skill.py/baselines.py'nin kendi
+kodunu hic cagirmadan, sadece parquet dosyalarindan + numpy/pandas/sklearn/scipy
+ile sifirdan yeniden hesaplandi: tablodaki HER rakam (Brier, AUC, MAE, RMSE, R2,
+model_bss, model_skill_rmse, 4 p-degeri) gosterilen hassasiyette birebir
+eslesti. Ek kontroller: kalibre persistence oranlari (0.1695/0.1583) panelden
+bagimsiz yeniden turetildi, ayni cikti; lag-0 ozelliklerinin panel sutunlariyla
+shift(0) kimligi dogrulandi (5/5 sutun); training_summary.json'da 47 ozellikten
+9'unun _lag0 oldugu ve modelin gercekten yeniden egitildigi (8.250 farkli tahmin
+degeri - gercek bir surekli dagilim) teyit edildi; climatology_prob'un sadece 11
+farkli deger almasi ilk bakista supheli gorundu ama 36 yillik referans donemde
+"esik-alti yil sayisi/36" kesri oldugu icin dogasi geregi ayrik oldugu, ve
+dagilimin k=1..11 araliginda SPI'nin teorik %15-19 oranina uygun bir tepe
+civarinda oldugu dogrulandi - bug degil.
+
+**Ancak bagimsiz dogrulama, IKINCI bir goz'un yerini TUTMUYOR** - ayni kisi hem
+uretim kodunu hem dogrulama script'ini yazdigi icin ayni tasarim korlugunu
+paylasabilir. Skeptic agent'in dar kapsamli (tam pipeline degil, bu turun diff'i
++ 4 bulgunun cozumu + yeni kod) ikinci turu ayri olarak calistirildi (asagida).
+
+**p-deger sunum sirasi duzeltildi: Wilcoxon once, t-test sonra.** spi_3@+3 icin
+t-test p=0.014, Wilcoxon p=0.078 - ayni karsilastirma icin farkli taraflarda.
+Mekanizma: paired t-test'in standart hata formulu farklarin BAGIMSIZ oldugunu
+varsayarak ornek varyansindan hesaplanir; pozitif oto-korelasyon altinda ortalama
+farkin GERCEK varyansi bu formulun hesapladigindan daha buyuktur, yani t-test
+kendi belirsizligini MEKANIK olarak kucuk gosterir ve gercekte olmasi
+gerekenden daha kucuk bir p basar - bu yonlu, bilinen bir sapma, belirsiz bir
+uyari degil. Wilcoxon sira-tabanli oldugu icin bu ozel mekanizmayi paylasmiyor
+(bagimliliga tamamen bagisik degil, ama bu spesifik yon-sapmasi ona uygulanmiyor).
+Tabloda artik "p (Wilcoxon / t-test §)" olarak, Wilcoxon ONCE basiliyor ve
+footnote'ta bu yon acikca yazili: iki test anlasmazsa Wilcoxon'un sayisi esas
+alinacak, t-test'inki tamamlayici/iyimser bir rakam olarak okunacak.
+
+**SS7 (Failure Conditions) boslugu - ONCEKI turdan farkli, GUNCEL rakamlarla:**
+Bu bulgu daha once (ikinci T8 turunden ONCE, eski model_skill_rmse=-0.120
+rakamiyla) phase0_log.md'ye yazilmisti. Duzeltmeler (kalibre persistence +
+lag-0 ozellikleri) spi_1@+1'in climatology'ye karsi marjini KUCULTTU:
+
+  ONCEKI:  model_skill_rmse = -0.120, p-degeri hic olculmemisti
+  SIMDIKI: model_skill_rmse = -0.048, p=0.105 (Wilcoxon) / 0.303 (t-test)
+
+Sonuc nitelik olarak degisti: eskiden "model climatology'yi acikca kaybediyor"
+denebilirdi (12 puanlik fark), simdi dogru ifade "model ile climatology
+ISTATISTIKSEL OLARAK AYIRT EDILEMIYOR, nokta tahmini hafif climatology lehine
+ama bu fark gurultu payinin icinde" - ki bu, PROJECT_SPEC 7'nin hic
+ongormedigi bir UCUNCU durum: ne "Tier 1 acikca basarisiz" (spec'in kapsamadigi
+orijinal boslugu), ne de "Tier 1 acikca basarili" (spec'in 2.1'deki varsayimi) -
+"olculemeyecek kadar kucuk fark, daha fazla veri/ozellik gerekiyor" durumu.
+
+Bu, boslugu KAPATMIYOR, INCELTIYOR: PROJECT_SPEC 7'ye eklenecek dorduncu kosul
+hala gerekli, ama sart ifadesi "Tier 1 climatology'yi ACIKCA gecemezse" degil
+"Tier 1 climatology'den ISTATISTIKSEL OLARAK AYRISMAZSA" olmali - cunku
+"acikca basarisiz" ile "belirsiz" arasindaki fark, Faz 1'de MODIS/SPEI/agirlikli
+toprak nemi eklendiginde neyin "basari" sayilacagini (ornegin p<0.05 ile
+climatology'yi GECMEK mi, yoksa sadece nokta tahmininin pozitif olmasi mi)
+onceden netlestirmeyi gerektiriyor - bu netlestirme simdi yapilmadi, Faz 1
+baslamadan once ETRAFLICA yapilmasi gereken acik bir karar olarak birakiliyor.
+
+GEREKEN (guncellenmis): Faz 1 oncesi (1) PROJECT_SPEC 7'ye "Tier 1 tam ozellik
+kumesiyle climatology'den istatistiksel olarak ayrisamazsa" kosulu + agirlikli
+skeptic-onayli bir p-esigi (0.05? Wilcoxon mu t-test mi esas alinacak - bu
+konusmada Wilcoxon'un esas alinmasi karara baglandi, spec'e de yazilmali)
+eklenmeli, (2) spi_1@+1 MODIS/SPEI/agirlikli toprak nemi eklendikten SONRA
+AYNI paired-test protokolüyle yeniden olculmeli.
+
+acik varsayim: hangi p-esigi/hangi test "basari/basarisizlik" karari icin esas
+sayilacak, kullaniciyla henuz netlesmedi - Faz 1 baslamadan once cevaplanmali.

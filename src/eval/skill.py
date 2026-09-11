@@ -400,7 +400,7 @@ def render_markdown(tables: list[dict[str, Any]], config: dict[str, Any], pop_si
             # as a formal significance claim.
             lines.append(
                 "| method | MAE | RMSE | R² | model skill (RMSE) | model skill (MAE) | "
-                "p (MAE, paired t / Wilcoxon) | n dates |"
+                "p (MAE, Wilcoxon / t-test §) | n dates |"
             )
             lines.append("|---|---|---|---|---|---|---|---|")
             for r in t["rows"]:
@@ -418,8 +418,14 @@ def render_markdown(tables: list[dict[str, Any]], config: dict[str, Any], pop_si
                 r2 = r.get("r2", float("nan"))
                 sig = r.get("significance")
                 p_s = "—"
+                # Wilcoxon printed FIRST, t-test second: the t-test's standard error
+                # assumes independent differences, so under the positive
+                # autocorrelation this table's own footnote (§) admits, it
+                # mechanically understates the true variance and reports a smaller
+                # p than it should - the leading number is the more conservative
+                # read, not just a formatting choice.
                 if sig and not np.isnan(sig.get("p_ttest", float("nan"))):
-                    p_s = f"{sig['p_ttest']:.3f} / {sig['p_wilcoxon']:.3f}"
+                    p_s = f"{sig['p_wilcoxon']:.3f} / {sig['p_ttest']:.3f}"
                 if r["method"] == "model":
                     skill_r_s = skill_m_s = "—"  # a method has no skill score against itself
                 lines.append(
@@ -438,7 +444,7 @@ def render_markdown(tables: list[dict[str, Any]], config: dict[str, Any], pop_si
             n_auc_undefined = model_row["n_dates_auc_undefined"]
             lines.append(
                 f"| method | AUC (n={n_auc}) | Brier (n={n_brier}) | model BSS | "
-                "p (Brier, paired t / Wilcoxon) |"
+                "p (Brier, Wilcoxon / t-test §) |"
             )
             lines.append("|---|---|---|---|---|")
             for r in t["rows"]:
@@ -453,8 +459,9 @@ def render_markdown(tables: list[dict[str, Any]], config: dict[str, Any], pop_si
                 bss_s = f"{bss:+.3f}" if bss is not None and not np.isnan(bss) else "N/A"
                 sig = r.get("significance")
                 p_s = "—"
+                # Wilcoxon first - see the regression table's comment above (§).
                 if sig and not np.isnan(sig.get("p_ttest", float("nan"))):
-                    p_s = f"{sig['p_ttest']:.3f} / {sig['p_wilcoxon']:.3f}"
+                    p_s = f"{sig['p_wilcoxon']:.3f} / {sig['p_ttest']:.3f}"
                 if r["method"] == "model":
                     bss_s = "—"
                 auc = r["auc"] if not np.isnan(r["auc"]) else float("nan")
@@ -482,7 +489,7 @@ def render_markdown(tables: list[dict[str, Any]], config: dict[str, Any], pop_si
         "",
         f"‡ {config['persistence_auc_note'].strip()}",
         "",
-        "**What the p-values do and do not establish.** Paired t-test and Wilcoxon "
+        "§ **What the p-values do and do not establish.** Paired t-test and Wilcoxon "
         "signed-rank, computed on the model's and each baseline's per-date metric "
         "series aligned on the SAME test dates - not a test of the two already-"
         "averaged means printed in the table. Both assume the paired differences "
@@ -494,7 +501,20 @@ def render_markdown(tables: list[dict[str, Any]], config: dict[str, Any], pop_si
         "bigger than noise\", not as a formal significance claim. Added after the "
         "skeptic audit found every skill number in earlier versions of this table "
         "was a bare mean with nothing to say whether the two methods were "
-        "distinguishable at all.",
+        "distinguishable at all.\n\n"
+        "**Why Wilcoxon is printed first.** The paired t-test's standard error is "
+        "built from the sample variance of the per-date differences under an "
+        "independence assumption; positive autocorrelation between dates means the "
+        "TRUE variance of the mean difference is larger than that formula computes, "
+        "so the t-test mechanically UNDERSTATES its own uncertainty and reports a "
+        "smaller p-value than a correctly-specified test would - a known, "
+        "directional bias, not a vague caveat. Wilcoxon is rank-based and does not "
+        "share that specific mechanism, though it is not immune to dependence "
+        "either - it is the more conservative of the two here, not a dependence-"
+        "corrected one. Where the two disagree (spi_3@+3 vs climatology: t=0.014, "
+        "Wilcoxon=0.078), read Wilcoxon's number as the primary one and the "
+        "t-test's as a supporting figure that likely overstates significance, not "
+        "the reverse.",
         "",
         "Reliability diagrams and spatially blocked CV are Phase 3 work "
         "(reports/phase0_log.md list B), not computed here.",

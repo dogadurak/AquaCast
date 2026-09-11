@@ -435,3 +435,179 @@ acik varsayim: yok. Reliability diagram, spatially blocked CV, permutation
   testi B listesinde/Faz 3'te kaliyor.
 sonraki: /leakage-audit (skeptic agent - CLAUDE.md'nin "Definition of done"
   bunu bir modelleme degisikligi icin zorunlu kiliyor), sonra /phase-gate
+
+---
+
+### T8 ek: iki dogrulama + bir spec boslugu (T8 kapandiktan sonra istendi)
+
+**(A) Bug 2'nin "tesadufen ayni sayi" iddiasi - artik iddia degil, olculdu.**
+
+Yontem: duzeltme oncesi ve sonrasi secimi yeniden kurup, uretilen satir
+sayisini VE (cell_id, issue_date) INSTANCE KUMELERINI karsilastirdim; "sayilar
+ayni cikti" tek basina dogrulama sayilmaz.
+
+```
+spi_3 (lead=3)  model satir: once=126,900  sonra=126,900   fark=0
+                instance kumesi ozdes: True (yalniz-once=0, yalniz-sonra=0)
+spi_1 (lead=1)  model satir: once=132,540  sonra=132,540   fark=0
+                instance kumesi ozdes: True (yalniz-once=0, yalniz-sonra=0)
+```
+
+MEKANIZMA (tek cumle): T7'nin kendi `y_all.notna()` kirpmasi issue tarihlerini
+zaten panel_sonu - lead'de bitirdigi icin (spi_3: 2025-09, spi_1: 2025-11),
+kaydirilmis tarihler tam olarak 2025-12'ye oturur ve test bolunmesinin ilk
+issue tarihi 2022-01 kaydirildiginda hala pencerenin icinde kalir - yani
+[2022-01, 2025-12] filtresi her iki tarih konvansiyonunda da HICBIR satiri
+kirpmaz, dolayisiyla kaydirma grup etiketlerinin bijeksiyonudur ve ayni 45/47
+grup degerinin ortalamasi degismez. Bu yapisal bir sonuc (T7'nin panel-sinir
+kirpmasinin turevi), sans degil - ama duzeltme olmadan ayni ozelligin gelecek
+bir panel uzamasinda korunacaginin GARANTISI yok, o yuzden kalici assert sart.
+
+**(B) Kayit duzeltmesi: "headline sayilar degismedi" yalnizca fix (2) icin dogru.**
+
+Fix (3) - baseline'lari modelin tam tarih kumesine kisitlamak - spi_1'in
+baseline sayilarini GERCEKTEN degistirdi (48 -> 47 tarih):
+
+```
+climatology         RMSE 0.7914875714124646 -> 0.7914596956807570   DEGISTI
+persistence         RMSE 1.0163650886097528 -> 1.0278173790206566   DEGISTI
+known_accumulation  RMSE 0.7914875714124646 -> 0.7914596956807570   DEGISTI
+```
+
+spi_3'te degismemesinin nedeni de olculdu, varsayilmadi: fazla 3 ay
+(2022-01/02/03) icin `actual_prob` tum 1,823 hucrede TEK SINIF (hepsi 0.0) -
+AUC tanimsiz oldugu icin bu aylar zaten dusuyordu. Yani spi_3'un sabit kalmasi
+"degismedi" degil, "zaten hesaba girmiyordu".
+
+**(C) Atlanan test adiyla dogrulandi.**
+
+`tests/test_leakage.py::test_permutation_yields_no_skill` - tek atlanan test.
+`pytest.importorskip("src.eval.permutation")` ile atliyor; `src/eval/` altinda
+yalnizca `__init__.py` ve `skill.py` var, permutation modulu gercekten yok
+(dosya sisteminden dogrulandi). PROJECT_SPEC 4.4 permutation testini Faz 3
+robustness isi olarak listeliyor, yani atlanmasi plana uygun. Reliability
+diagram ve spatially blocked CV HIC test degildi - skill tablosunun dipnotunda
+Faz 3 isi olarak duruyorlar; "atlanan test" onlar degil.
+
+**(D) SPEC BOSLUGU - PROJECT_SPEC 7 bu senaryoyu kapsamiyor.**
+
+7. Failure conditions yalnizca *Tier 2*'nin climatology'yi gecememesini
+ongoruyor ve cevabi "Tier 1'e daral" olarak veriyor. Ama olculen sonuc
+*Tier 1'in kendisinin de* (spi_1@+1, RMSE 0.886 vs climatology 0.791, skill
+-0.120) climatology'yi gecemedigi. Bu durumda "Tier 1'e daral" bir cikis yolu
+degil - daralacak yer kalmiyor. Ayrica 2.1 "Tier 1 should reach meaningful
+skill" diyor; bu artik DOGRULANMAMIS bir varsayim, cunku Faz 0 onu test etti ve
+gecemedi.
+
+Bunu "beklenen sonuc" diye gecistirmek yanlis olur: spi_3@+3 icin negatif
+sonuc PROJECT_SPEC'in kendi Problem 2'sinde ONCEDEN kayitliydi, spi_1@+1 icin
+DEGILDI. Faz 0'in ozellikle minimal ozellik kumesi (MODIS NDVI/LST yok, derinlik
+agirlikli toprak nemi anomalisi yok, SPEI yok) bunu tek basina Tier 1
+aleyhine bir hukum yapmaz - ama spec'in bu ihtimali hic dusunmemis olmasi
+gercek bir boslugu.
+
+GEREKEN: Faz 1'e gecerken PROJECT_SPEC 7'ye dorduncu bir failure condition
+eklenmeli ("Tier 1 tam ozellik kumesiyle de climatology'yi gecemezse" - cevabi
+ne?), ve spi_1@+1 MODIS/SPEI/agirlikli toprak nemi eklendikten SONRA yeniden
+test edilmeli. O test yapilana kadar 2.1'in Tier 1 iddiasi acik varsayim
+olarak isaretlidir.
+
+---
+
+### T8 ikinci tur: skeptic audit'in 4 bulgusu duzeltildi, tablo yeniden uretildi
+
+Skeptic'in 10 bulgusundan 4'u (kullaniciyla "duzeltmemiz lazim" olarak isaretlenen
+kritik/major sinifindakiler) ele alindi. Digerleri (AUC'un mekansal anlami,
+train/eval populasyon farki, known-accumulation'in ayirt edicilik gucu olmamasi,
+test doneminin kuraklik tabanli oran farki) tasarim notu olarak kaldi, kod
+degisikligi gerektirmiyor - skeptic'in kendisi de bunlari "minor/design" olarak
+isaretlemisti.
+
+**(1) skill.py - skill-score etiketi ters okunuyordu.** Aritmetik dogruydu
+(`skill_score = 1 - model/baseline`, pozitif = model kazaniyor), ama tabloda
+climatology satirinda "skill -0.120 (vs model)" olarak basiliyordu - okuyucu bunu
+"climatology'nin modele karsi skoru" diye okur, oysa gercek anlami "modelin
+climatology'ye karsi skoru". Duzeltme RENDER katmaninda: sutun basligi artik
+"model skill (RMSE)" / "model BSS" - kimin skoru oldugu her satirda tek anlamli.
+Anahtar isimleri de `skill_rmse_vs_model` -> `model_skill_rmse` olarak degisti.
+
+**(2) baselines.py - persistence olasilik tahmini sert 0/1'den kalibre edilmis
+gercek olasiliga cevrildi.** Referans donemde (1981-2016) havza-capinda tek bir
+2-durumlu gecis tablosu (P(gelecek<esik | simdi<esik), P(gelecek<esik |
+simdi>=esik)) olculup butun seriye uygulandi - climatology_forecast ile ayni
+disipilin (fit_start/fit_end disinda hicbir veri kullanilmiyor).
+
+**KRITIK - bu duzeltmenin kendisi bir sizinti icin iyi bir sizinti yaratti,
+CLAUDE.md'nin "sonuc beklenenden iyi cikarsa once sizinti supheleni" kuralinin
+tam da onlemeye calistigi durum:** ilk yazdigim versiyon, satirin KENDI tarihindeki
+degeri "simdiki durum" olarak kullaniyordu. Ama baselines_monthly.parquet'te
+"date" DOGRULAMA tarihi (T6/T8'in yerlesik sozlesmesi, bkz. skill.py'nin tarih-
+kaydirma yorumu) - yani satirin kendi tarihindeki deger, tam olarak o satirin
+CEVABI (`actual_prob`). Ilk calistirmada persistence'in AUC'u tam **1.0** cikti -
+lead=3 icin imkansiz derecede iyi bir sonuc, hemen incelendi. Mekanizma: model
+kendi cevabina bakiyordu. Duzeltme: uygulama adiminda `persistence_forecast()`
+(zaten var olan, dogru kaydirilmis fonksiyon, `target[d-lead]`) kullanildi -
+fit ile uygulamanin "simdi" tanimini ayni hale getirdi. Duzeltme sonrasi
+persistence AUC = 0.483 (makul, rastgeleye yakin), sizinti kapandi. Bir de
+build()'deki mode-tabanli saglamlik kontrolu ayni hatayi tasiyordu (actual_prob'a
+gore gruplaniyordu, artik issue-time state'e gore duzeltildi).
+
+Sonuc: spi_3@+3'un model_bss'i (modelin persistence'a karsi Brier Skill Score'u)
++0.377 (sert 0/1, YANLIS) -> -0.048 (kalibre, DOGRU). "Model persistence'i acikla
+yeniyor" iddiasi tamamen ortadan kalkti - model kalibre edilmis persistence'i de
+GECEMIYOR (persistence Brier 0.1958, model 0.2052).
+
+**(3) build.py - modele lag-0 (esdeger, t anindaki) ozellikler eklendi.**
+Skeptic'in bulgusu: model'in ozellikleri en yakin ay olarak t-1'i kullaniyordu,
+oysa persistence baseline'i t anini (issue tarihini) kullaniyordu - model,
+kendi baseline'ina karsi elini bir ay geriden basliyordu, spi_1@+1 aslinda +2
+ay tahmini yapiyordu. `LAG_MONTHS = (0,1,2,3,6)` - lag=0, forecast anindaki
+gozlemi (henuz gecmise kaymamis deger) temsil eder, hicbir hedefle ortusmuyor
+(spi_3@+3: hedef [t+1,t+3], spi_3_lag0 [t-2,t] - bosluk var; spi_1@+1: hedef
+t+1, spi_1_lag0 sadece t - bosluk var). `assert_no_future_reference()`'in genel
+dongusu lag=0'i otomatik dogru kapsadi, kod degisikligi gerekmedi.
+
+**(4) skill.py - iki gercek defect + bir eksiklik daha:**
+  - Brier artik AUC ile ayni kosulda dusurulmuyor: tek-sinifli tarihlerde AUC
+    tanimsiz ama Brier tanimli - eskiden ikisi birlikte dusuyordu, 10/45 tarihte
+    (2 en genis kuraklik ayi dahil) Brier hic hesaplanmiyordu. Artik AUC n=35,
+    Brier n=45 ayri sutunlar.
+  - Eslestirilmis (paired) anlamlilik testi eklendi: her taban cizgisi icin
+    model'in ve o taban cizgisinin tarih-bazli metrik serisi ayni tarihlerde
+    eslesip paired t-test VE Wilcoxon signed-rank ile karsilastiriliyor (scipy,
+    zaten requirements.txt'te bagimlilik olarak vardi, yeni paket eklenmedi).
+    Bagimlilik varsayimi acikca ihlal ediliyor (ardisik SPI aylari otokorele) -
+    tabloya ayri bir footnote ile "bu p-degerleri iyimser, resmi bir anlamlilik
+    iddiasi degil" notu eklendi, gizlenmedi.
+
+**YENIDEN URETILEN SONUCLAR (T6 -> T7 -> T8 sirayla rerun edildi, 9/10 leakage
+testi hala geciyor, degisen tek sey lag-0 ozellik + kalibre persistence):**
+
+spi_3@+3 (35/45 tarih AUC icin, 45/45 Brier icin): model AUC 0.4768, Brier
+0.2052; climatology AUC 0.5129, Brier 0.1949 (model_bss -0.053, p=0.014/0.078);
+persistence (kalibre) AUC 0.4826, Brier 0.1958 (model_bss -0.048, p=0.015/0.128).
+Model artik HICBIR taban cizgisini (climatology DA persistence DE) acikca
+gecmiyor - onceki "persistence'i aciyla yeniyoruz" basligi tamamen dustu.
+
+spi_1@+1 (47 tarih): model MAE 0.7296, RMSE 0.8298 (onceki 0.7842/0.8861'den
+IYILESTI - lag-0 ozelliginin dogrudan etkisi); climatology MAE 0.6988, RMSE
+0.7915 (model_skill_rmse -0.048, onceki -0.120'den kuculdu ama hala negatif,
+p=0.303/0.105 - istatistiksel olarak ayirt edilemez); persistence MAE 0.8904,
+RMSE 1.0278 (model_skill_rmse +0.193, p=0.065/0.021 - model'in persistence'i
+gecmesi t-test'te sinirda, Wilcoxon'da anlamli).
+
+**GUNCELLENEN BASLIK:** Model, lag-0 ozelligiyle kismen iyilesti ve kalibre
+persistence'i (spi_1'de) muhtemelen geciyor, ama climatology'yi (her iki
+hedefte de) hala GECEMIYOR ve spi_3'te kalibre persistence'i de gecemiyor.
+Negatif sonuc AYNI KALDI, sadece daha az abartili ve daha dogru olculdu -
+tam olarak CLAUDE.md'nin istedigi: "beklenenden iyi cikan sonuc -> once
+sizinti supheleni" kurali BIR SIZINTI YAKALADI (persistence AUC=1.0), ve
+duzeltmeler sonucu degistirmedi, sadece daha durust olcculdu.
+
+acik varsayim: p-degerlerinin bagimsizlik varsayimi ihlal ediliyor (dipnotta
+belirtildi). Reliability diagram, spatially blocked CV, permutation testi
+hala Faz 3'te.
+
+sonraki: /leakage-audit'in bu ikinci turu (skeptic'in bulgularinin duzeltilmis
+hali) gozden gecirilmeli mi, yoksa /phase-gate'e mi gecilmeli - kullaniciya
+soruldu.

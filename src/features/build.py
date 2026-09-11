@@ -18,7 +18,18 @@ import pandas as pd
 # Lag depths for feature construction - months of history looked back from t.
 # Bounded at 6 so the longest feature window (6) plus the longest lead (3) never
 # needs to reach past t, and the 12-month split gap safely covers it.
-LAG_MONTHS = (1, 2, 3, 6)
+#
+# 0 IS INCLUDED DELIBERATELY: lag 0 (shift(0), the identity) is the state OBSERVED
+# AT the forecast issue date t itself - not a future value, since a forecast issued
+# at t always has t's own weather available. Added after the skeptic audit found the
+# model was missing it while persistence_forecast (baselines.py) used exactly this
+# month-t value as its whole forecast - the model was competing on features that
+# stopped one month short of what the naive baseline saw, making "model doesn't beat
+# persistence" partly an artefact of a handicap, not of the model's skill. Checked
+# for overlap the same way every other lag is: target spi_3@+3 accumulates
+# [t+1,t+3], spi_3_lag0 accumulates [t-2,t] - zero overlap. target spi_1@+1 is month
+# t+1 alone, spi_1_lag0 is month t alone - zero overlap. See failure-modes.
+LAG_MONTHS = (0, 1, 2, 3, 6)
 BASE_FEATURE_COLUMNS = [
     "precip_chirps_mm", "spi_1", "spi_3", "t2m_c",
     "swvl1", "swvl2", "swvl3", "swvl4", "pet_era5_mm",

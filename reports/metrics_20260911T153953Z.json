@@ -1,0 +1,194 @@
+{
+  "generated_utc": "2026-09-11T15:39:53+00:00",
+  "git_sha": "53ddf2686b50dd43c82199973c39611b89fcbddc",
+  "provenance": {
+    "git_sha": "53ddf2686b50dd43c82199973c39611b89fcbddc",
+    "git_dirty": true,
+    "git_dirty_files": [
+      "onfig/model.yaml",
+      "reports/baselines_summary.json",
+      "reports/phase0_log.md",
+      "reports/skill_table.md",
+      "reports/training_summary.json",
+      "src/eval/skill.py",
+      "src/features/build.py",
+      "src/models/baselines.py",
+      "reports/metrics_20260911T153546Z.json",
+      "reports/metrics_20260911T153907Z.json"
+    ],
+    "producers_dirty": [
+      "src/eval/skill.py"
+    ],
+    "code_tree": {
+      "src": "acd385df73e3b6d183761c695ac300d53db50530",
+      "config": "05073d5941e7b1146cad2d4d32968a1442647786"
+    },
+    "producers": [
+      "src/eval/skill.py",
+      "config/model.yaml"
+    ],
+    "producer_digest": "5e01d1cfcbb79df4"
+  },
+  "analysis_population_cells": 1823,
+  "test_period": [
+    "2022-01-01",
+    "2025-12-31"
+  ],
+  "aggregation": "per_forecast_date_then_mean",
+  "tables": [
+    {
+      "target": "spi_3",
+      "lead_months": 3,
+      "kind": "classification",
+      "rows": [
+        {
+          "auc": 0.47676874387205614,
+          "brier": 0.2051548027727674,
+          "method": "model",
+          "n_dates": 45,
+          "n_dates_auc": 35,
+          "n_dates_dropped_entirely": 0,
+          "n_dates_auc_undefined": 10,
+          "dates_auc_undefined": [
+            "2022-04-01",
+            "2022-07-01",
+            "2023-01-01",
+            "2023-05-01",
+            "2023-06-01",
+            "2023-07-01",
+            "2023-08-01",
+            "2024-03-01",
+            "2024-09-01",
+            "2025-03-01"
+          ]
+        },
+        {
+          "auc": 0.5129104627996043,
+          "brier": 0.19490309014445054,
+          "method": "climatology",
+          "n_dates": 45,
+          "n_dates_auc": 35,
+          "n_dates_dropped_entirely": 0,
+          "n_dates_auc_undefined": 10,
+          "dates_auc_undefined": [
+            "2022-04-01",
+            "2022-07-01",
+            "2023-01-01",
+            "2023-05-01",
+            "2023-06-01",
+            "2023-07-01",
+            "2023-08-01",
+            "2024-03-01",
+            "2024-09-01",
+            "2025-03-01"
+          ],
+          "model_bss": -0.05259902560148699
+        },
+        {
+          "auc": 0.4825990391908457,
+          "brier": 0.19576797530486378,
+          "method": "persistence",
+          "n_dates": 45,
+          "n_dates_auc": 35,
+          "n_dates_dropped_entirely": 0,
+          "n_dates_auc_undefined": 10,
+          "dates_auc_undefined": [
+            "2022-04-01",
+            "2022-07-01",
+            "2023-01-01",
+            "2023-05-01",
+            "2023-06-01",
+            "2023-07-01",
+            "2023-08-01",
+            "2024-03-01",
+            "2024-09-01",
+            "2025-03-01"
+          ],
+          "model_bss": -0.04794873856812276
+        },
+        {
+          "auc": 0.5129104627996043,
+          "brier": 0.19490309014445054,
+          "method": "known_accumulation",
+          "n_dates": 45,
+          "n_dates_auc": 35,
+          "n_dates_dropped_entirely": 0,
+          "n_dates_auc_undefined": 10,
+          "dates_auc_undefined": [
+            "2022-04-01",
+            "2022-07-01",
+            "2023-01-01",
+            "2023-05-01",
+            "2023-06-01",
+            "2023-07-01",
+            "2023-08-01",
+            "2024-03-01",
+            "2024-09-01",
+            "2025-03-01"
+          ],
+          "model_bss": -0.05259902560148699
+        },
+        {
+          "method": "c3s_raw",
+          "auc": NaN,
+          "brier": NaN,
+          "n_dates": 0,
+          "model_bss": null
+        }
+      ]
+    },
+    {
+      "target": "spi_1",
+      "lead_months": 1,
+      "kind": "regression",
+      "rows": [
+        {
+          "mae": 0.7296410970535999,
+          "rmse": 0.8298163912840244,
+          "r2": -3.615494311194107,
+          "method": "model",
+          "n_dates": 47
+        },
+        {
+          "mae": 0.6987672859072949,
+          "rmse": 0.791459695680757,
+          "r2": -3.442905374248003,
+          "method": "climatology",
+          "n_dates": 47,
+          "model_skill_rmse": -0.04846323295120625,
+          "model_skill_mae": -0.044183252091170466,
+          "r2_diff_vs_model": -0.172588936946104
+        },
+        {
+          "mae": 0.8903683984626155,
+          "rmse": 1.0278173790206566,
+          "r2": -9.582287715967563,
+          "method": "persistence",
+          "n_dates": 47,
+          "model_skill_rmse": 0.19264218700533653,
+          "model_skill_mae": 0.18051775162566508,
+          "r2_diff_vs_model": 5.9667934047734565
+        },
+        {
+          "mae": 0.6987672859072949,
+          "rmse": 0.791459695680757,
+          "r2": -3.442905374248003,
+          "method": "known_accumulation",
+          "n_dates": 47,
+          "model_skill_rmse": -0.04846323295120625,
+          "model_skill_mae": -0.044183252091170466,
+          "r2_diff_vs_model": -0.172588936946104
+        },
+        {
+          "method": "c3s_raw",
+          "mae": NaN,
+          "rmse": NaN,
+          "r2": NaN,
+          "n_dates": 0,
+          "model_skill_rmse": null,
+          "model_skill_mae": null
+        }
+      ]
+    }
+  ]
+}

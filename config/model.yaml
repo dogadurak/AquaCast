@@ -65,12 +65,23 @@ c3s_raw_status:
   reason: "CDS access pending - see reports/phase0_log.md open items (list B)"
 
 persistence_auc_note: >
-  Persistence's probability forecast for a classification target is a hard 0/1
-  step function (today's state, carried forward unchanged) rather than a
-  calibrated probability - see src/models/baselines.py
-  persistence_probability_forecast. Its AUC and Brier score are therefore
-  expected to look coarser / more discretised than a continuous forecast's.
-  This is a property of thresholding, not a defect in the baseline.
+  Persistence's probability forecast is CALIBRATED, not a hard 0/1 step function:
+  P(target < threshold, lead months ahead | target < threshold lead-months-ago, the
+  value known at issue time), fit basin-wide on the reference period and applied
+  unchanged - see src/models/baselines.py persistence_probability_forecast. A hard
+  0/1 form was used through the first T8 run; the skeptic audit found it was a
+  quadratic-scoring-rule worst case that inflated "model beats persistence" from a
+  real margin into mostly an artefact of an uncalibrated baseline. Recalibrating
+  moved spi_3@+3's model_bss (the model's Brier Skill Score against persistence,
+  see src/eval/skill.py skill_score) from +0.377 (hard 0/1) to -0.048 (calibrated,
+  after also fixing a leak the recalibration itself introduced and this project's
+  own "better than expected -> suspect a leak first" rule caught - see
+  reports/phase0_log.md): the model does not beat a properly calibrated persistence
+  at this target either, which the hard-0/1 baseline was hiding. AUC is still
+  coarser than a continuous forecast's because the basin-wide fit yields only two
+  distinct probability values (one per current state) rather than a per-cell
+  continuum - that remaining coarseness is a property of pooling for sample size,
+  not of thresholding, and not a defect.
 
 known_accumulation_note: >
   For every approved (target, lead) pair in PROJECT_SPEC.md section 4.1, overlap

@@ -6,23 +6,25 @@ Metrics computed **per forecast date** across analysis cells, then averaged acro
 
 ## spi_3 @ +3 month(s) (classification)
 
-| method | AUC | Brier | BSS (vs model) | n dates (10 of 45 dropped - single class present) |
+| method | AUC (n=35) | Brier (n=45) | model BSS | p (Brier, paired t / Wilcoxon) |
 |---|---|---|---|---|
-| model | 0.4904 | 0.2113 | N/A | 35 |
-| climatology | 0.5129 | 0.2039 | -0.036 | 35 |
-| persistence ‡ | 0.4826 | 0.3391 | +0.377 | 35 |
-| known_accumulation * | 0.5129 | 0.2039 | -0.036 | 35 |
-| c3s_raw † | nan | nan | N/A | 0 |
+| model | 0.4768 | 0.2052 | — | — |
+| climatology | 0.5129 | 0.1949 | -0.053 | 0.014 / 0.078 |
+| persistence ‡ | 0.4826 | 0.1958 | -0.048 | 0.015 / 0.128 |
+| known_accumulation * | 0.5129 | 0.1949 | -0.053 | 0.014 / 0.078 |
+| c3s_raw † | nan | nan | N/A | — |
+
+AUC excludes 10 of 45 test dates where every analysis cell fell in the same class (basin-wide drought or none) - undefined for AUC, not for Brier, which scores all 45 dates including those. Dropped for both metrics: 0 date(s) with fewer than 10 analysis cells.
 
 ## spi_1 @ +1 month(s) (regression)
 
-| method | MAE | RMSE | R² | skill (RMSE) | skill (MAE) | n dates |
-|---|---|---|---|---|---|---|
-| model | 0.7842 | 0.8861 | -4.6312 | N/A (vs model) | N/A (vs model) | 47 |
-| climatology | 0.6988 | 0.7915 | -3.4429 | -0.120 (vs model) | -0.122 (vs model) | 47 |
-| persistence | 0.8904 | 1.0278 | -9.5823 | +0.138 (vs model) | +0.119 (vs model) | 47 |
-| known_accumulation * | 0.6988 | 0.7915 | -3.4429 | -0.120 (vs model) | -0.122 (vs model) | 47 |
-| c3s_raw † | nan | nan | nan | N/A (vs model) | N/A (vs model) | 0 |
+| method | MAE | RMSE | R² | model skill (RMSE) | model skill (MAE) | p (MAE, paired t / Wilcoxon) | n dates |
+|---|---|---|---|---|---|---|---|
+| model | 0.7296 | 0.8298 | -3.6155 | — | — | — | 47 |
+| climatology | 0.6988 | 0.7915 | -3.4429 | -0.048 | -0.044 | 0.303 / 0.105 | 47 |
+| persistence | 0.8904 | 1.0278 | -9.5823 | +0.193 | +0.181 | 0.065 / 0.021 | 47 |
+| known_accumulation * | 0.6988 | 0.7915 | -3.4429 | -0.048 | -0.044 | 0.303 / 0.105 | 47 |
+| c3s_raw † | nan | nan | nan | N/A | N/A | — | 0 |
 
 ---
 
@@ -32,7 +34,9 @@ Metrics computed **per forecast date** across analysis cells, then averaged acro
 
 † CDS access pending - see reports/phase0_log.md open items (list B)
 
-‡ Persistence's probability forecast for a classification target is a hard 0/1 step function (today's state, carried forward unchanged) rather than a calibrated probability - see src/models/baselines.py persistence_probability_forecast. Its AUC and Brier score are therefore expected to look coarser / more discretised than a continuous forecast's. This is a property of thresholding, not a defect in the baseline.
+‡ Persistence's probability forecast is CALIBRATED, not a hard 0/1 step function: P(target < threshold, lead months ahead | target < threshold lead-months-ago, the value known at issue time), fit basin-wide on the reference period and applied unchanged - see src/models/baselines.py persistence_probability_forecast. A hard 0/1 form was used through the first T8 run; the skeptic audit found it was a quadratic-scoring-rule worst case that inflated "model beats persistence" from a real margin into mostly an artefact of an uncalibrated baseline. Recalibrating moved spi_3@+3's model_bss (the model's Brier Skill Score against persistence, see src/eval/skill.py skill_score) from +0.377 (hard 0/1) to -0.048 (calibrated, after also fixing a leak the recalibration itself introduced and this project's own "better than expected -> suspect a leak first" rule caught - see reports/phase0_log.md): the model does not beat a properly calibrated persistence at this target either, which the hard-0/1 baseline was hiding. AUC is still coarser than a continuous forecast's because the basin-wide fit yields only two distinct probability values (one per current state) rather than a per-cell continuum - that remaining coarseness is a property of pooling for sample size, not of thresholding, and not a defect.
+
+**What the p-values do and do not establish.** Paired t-test and Wilcoxon signed-rank, computed on the model's and each baseline's per-date metric series aligned on the SAME test dates - not a test of the two already-averaged means printed in the table. Both assume the paired differences are independent across dates, which they are NOT here: consecutive test months share autocorrelated weather (spi_3's own accumulation window adds direct overlap between neighbouring dates on top of that). So a p-value here is optimistic - smaller than it would be for truly independent dates - and should be read as "is this gap even plausibly bigger than noise", not as a formal significance claim. Added after the skeptic audit found every skill number in earlier versions of this table was a bare mean with nothing to say whether the two methods were distinguishable at all.
 
 Reliability diagrams and spatially blocked CV are Phase 3 work (reports/phase0_log.md list B), not computed here.
 

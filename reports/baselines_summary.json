@@ -1,25 +1,32 @@
 {
-  "generated_utc": "2026-09-11T11:05:27+00:00",
+  "generated_utc": "2026-09-11T15:38:45+00:00",
   "provenance": {
-    "git_sha": "d6c7aa22cbf799d7f9e64ccc8f1598ccd03dadfb",
+    "git_sha": "53ddf2686b50dd43c82199973c39611b89fcbddc",
     "git_dirty": true,
     "git_dirty_files": [
       "onfig/model.yaml",
-      "src/models/baselines.py"
+      "reports/baselines_summary.json",
+      "reports/phase0_log.md",
+      "reports/skill_table.md",
+      "reports/training_summary.json",
+      "src/eval/skill.py",
+      "src/features/build.py",
+      "src/models/baselines.py",
+      "reports/metrics_20260911T153546Z.json"
     ],
     "producers_dirty": [
       "src/models/baselines.py"
     ],
     "code_tree": {
-      "src": "276b3be692ad12081dadd03dd2948043fa287537",
-      "config": "d4841d9421911ea5ee9e9814f5705a6456b98bb0"
+      "src": "acd385df73e3b6d183761c695ac300d53db50530",
+      "config": "05073d5941e7b1146cad2d4d32968a1442647786"
     },
     "producers": [
       "src/models/baselines.py",
       "config/model.yaml",
       "config/data.yaml"
     ],
-    "producer_digest": "c3bfde1363a46dad"
+    "producer_digest": "fa5facc4debaa66a"
   },
   "fit_period": [
     1981,
@@ -44,5 +51,5 @@
     "available": false,
     "reason": "CDS access pending - see reports/phase0_log.md open items (list B)"
   },
-  "persistence_auc_note": "Persistence's probability forecast for a classification target is a hard 0/1 step function (today's state, carried forward unchanged) rather than a calibrated probability - see src/models/baselines.py persistence_probability_forecast. Its AUC and Brier score are therefore expected to look coarser / more discretised than a continuous forecast's. This is a property of thresholding, not a defect in the baseline."
+  "persistence_auc_note": "Persistence's probability forecast is CALIBRATED, not a hard 0/1 step function: P(target < threshold, lead months ahead | target < threshold now), fit basin-wide on the reference period and applied unchanged - see src/models/baselines.py persistence_probability_forecast. A hard 0/1 form was used through the first T8 run; the skeptic audit found it was a quadratic-scoring-rule worst case that inflated \"model beats persistence\" from a real margin into mostly an artefact of an uncalibrated baseline (Brier BSS +0.377 hard-0/1 vs +0.0003 calibrated on spi_3@+3 - see reports/phase0_log.md). AUC is still coarser than a continuous forecast's because the basin-wide fit yields only two distinct probability values (one per current state) rather than a per-cell continuum - that remaining coarseness is a property of pooling for sample size, not of thresholding, and not a defect."
 }

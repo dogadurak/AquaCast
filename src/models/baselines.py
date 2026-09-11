@@ -168,18 +168,67 @@ def probability_known_accumulation_forecast(
 
 
 def persistence_probability_forecast(
-    panel: pd.DataFrame, target: str, lead_months: int, threshold: float
+    panel: pd.DataFrame, target: str, lead_months: int, threshold: float,
+    fit_start: int, fit_end: int,
 ) -> pd.Series:
-    """Standard probabilistic-persistence baseline: today's state, carried forward
-    as a hard 0/1 forecast of the future state (not calibrated - a step function).
+    """Calibrated persistence: P(target < threshold, `lead_months` ahead | target <
+    threshold `lead_months` AGO - i.e. what was known at issue time), estimated
+    empirically and applied as a real probability - not the hard 0/1 step function
+    this returned before the skeptic audit found it inflated "model beats
+    persistence" by being a Brier worst case by construction on a ~15-25%
+    base-rate event.
 
-    Its AUC and Brier score are expected to look coarser than a continuous
-    forecast's precisely because of this - see persistence_auc_note in
-    config/model.yaml. Not a defect; the coarseness is a documented property of
-    thresholding rather than modelling.
+    TWO SEPARATE ROLES FOR "row's own date", NOT ONE - the same confusion this
+    module's docstring warns about for fit period vs prediction range, caught here
+    the hard way: a first version of this function used `panel[target]` AT THE
+    ROW'S OWN DATE as "now", which for this table's VERIFICATION-date convention
+    (see build_baselines_for_target: `out["actual_prob"]` is `panel[target]` at
+    that SAME row's date) meant "now" and "the answer" were the same value -
+    producing AUC 1.0 on the persistence row of the first rerun after the skeptic
+    audit. Caught by this project's own rule: a result that came out better than
+    expected (AUC 1.0 at lead 3) is a suspected leak until proven otherwise, not a
+    win. Fixed by reusing `persistence_forecast()` above - which already shifts
+    correctly to `target[d - lead_months]`, the value known at issue time - as the
+    lookup key, so both the continuous and probability-shaped persistence
+    baselines share the exact same notion of "what persistence knows".
+
+    FIT is a separate, date-convention-free step: pool (state at row r, state at
+    row r + lead_months) pairs across the reference period only, which is valid
+    regardless of what a "row" represents in an external table, then estimate
+    P(future state | current state) from those pairs.
+
+    FIT BASIN-WIDE, not per (cell, calendar month): a 2-state transition table per
+    cell-month would split the fit period's ~36 years into buckets some cells never
+    see a drought month in (undefined transition), which is worse than the coarse
+    hard-0/1 baseline it replaces. One pooled pair of rates (P(future|now=below),
+    P(future|now=above)) needs the whole reference period's sample size and stays a
+    genuinely naive baseline - it does not use cell identity or season, exactly like
+    the persistence it calibrates.
+
+    Fit strictly on [fit_start, fit_end] (same discipline as climatology_forecast),
+    applied unchanged to validation and test.
     """
-    cont = persistence_forecast(panel, target, lead_months)
-    return (cont < threshold).astype(float).rename(f"{target}_persist_prob")
+    ordered = panel.sort_values(["cell_id", "date"]).reset_index(drop=True)
+    state_now = ordered[target] < threshold
+    future_val = ordered.groupby("cell_id")[target].shift(-lead_months)
+    state_future = future_val < threshold
+
+    ref_mask = (ordered["date"].dt.year >= fit_start) & (ordered["date"].dt.year <= fit_end)
+    fit = pd.DataFrame({"now": state_now, "future": state_future.astype(float)})[ref_mask].dropna()
+    rate_by_state = fit.groupby("now")["future"].mean()
+    if not {False, True}.issubset(set(rate_by_state.index)):
+        raise AssertionError(
+            f"{target}: reference period {fit_start}-{fit_end} does not contain both "
+            "current-state classes (below/above threshold) at basin scale - cannot "
+            "calibrate persistence. Widen the reference period or drop this baseline "
+            "for this target rather than silently falling back to the hard 0/1 form."
+        )
+
+    # APPLICATION uses the value known at ISSUE time (lead_months before this row's
+    # own verification date), not this row's own value - see docstring above.
+    state_known_at_issue = persistence_forecast(panel, target, lead_months) < threshold
+    prob = state_known_at_issue.map(rate_by_state).astype(float)
+    return prob.rename(f"{target}_persist_prob")
 
 
 def c3s_raw_probability_forecast(panel: pd.DataFrame, target: str) -> pd.Series:
@@ -227,7 +276,7 @@ def build_baselines_for_target(
             panel, target, threshold, fit_start, fit_end
         )
         out["persistence_prob"] = persistence_probability_forecast(
-            panel, target, lead_months, threshold
+            panel, target, lead_months, threshold, fit_start, fit_end
         )
         out["known_accumulation_prob"] = probability_known_accumulation_forecast(
             panel, target, lead_months, k, threshold, fit_start, fit_end
@@ -311,6 +360,7 @@ def build() -> pd.DataFrame:
             expected, bool(matches),
         )
         if kind == "classification":
+            threshold = t_cfg["threshold"]
             prob_lo_hi_ok = bool(sub["climatology_prob"].between(0, 1).all())
             ok &= report(f"{name}: climatology_prob within [0,1]", True, prob_lo_hi_ok)
             prob_matches = np.allclose(
@@ -331,6 +381,60 @@ def build() -> pd.DataFrame:
             print(f"  [INFO    ] {name}: climatology_prob mean {empirical_mean:.4f} vs "
                   f"theoretical Phi(-1)={theoretical:.4f} (drift {drift:+.4f}) - "
                   "a gamma-fit calibration diagnostic, not a gate")
+
+            # D: calibrated persistence_prob - same discipline as check A, adapted:
+            # unlike climatology, persistence's OUTPUT at a row legitimately depends
+            # on that SAME row's own current value (that is what persistence means),
+            # so poisoning a test-period row changes ITS OWN output by design - that
+            # is not leakage. What must NOT move is the FIT (the two rate_by_state
+            # constants, estimated only from [fit_start, fit_end]). Checked here by
+            # comparing poisoned vs clean output restricted to PRE-poison rows
+            # (years < 2022, i.e. before the sentinel), where state_now is identical
+            # between the two runs - any difference there could only come from a
+            # different fit, since poisoning years >= 2022 cannot enter a fit
+            # window ending 2016.
+            probe2 = panel.copy()
+            probe2.loc[probe2["date"].dt.year >= 2022, name] = 999999.0
+            poisoned_persist = persistence_probability_forecast(
+                probe2, name, lead, threshold, fit_start, fit_end
+            )
+            clean_persist = persistence_probability_forecast(
+                panel, name, lead, threshold, fit_start, fit_end
+            )
+            pre_poison = panel["date"].dt.year < 2022
+            ok &= report(
+                f"persistence_prob[{name}] fit unaffected by a poisoned test-period "
+                "value (compared on pre-poison rows, where the input is identical)",
+                True, bool(np.allclose(
+                    poisoned_persist[pre_poison], clean_persist[pre_poison], equal_nan=True
+                )),
+            )
+            prob_lo_hi_ok2 = bool(sub["persistence_prob"].dropna().between(0, 1).all())
+            ok &= report(f"{name}: persistence_prob within [0,1]", True, prob_lo_hi_ok2)
+            # `sub["actual_prob"]` is (panel[target] < threshold) at THIS row's own
+            # date - i.e. the "now" state persistence_probability_forecast conditions
+            # on - already aligned to sub's own row order. Pulling a fresh mask from
+            # `panel` here would mismatch: `sub` came out of a `pd.concat(...,
+            # ignore_index=True)` across targets, so its index labels are not
+            # panel's, only its row order is (this cost a rewrite to find).
+            #
+            # NOT `sub["actual_prob"]` - that is the VERIFICATION-date state (the
+            # answer being forecast), and persistence_prob is keyed on the
+            # ISSUE-time state (`persistence_forecast(...) < threshold`, lead
+            # months earlier) after the AUC-1.0 leak fix above. Recomputed directly
+            # here, aligned to `sub` by row order (see the note two lines up).
+            issue_state = (persistence_forecast(panel, name, lead) < threshold).to_numpy()
+            state_now_ref = pd.Series(issue_state, index=sub.index)
+            rate_when_below = float(sub.loc[state_now_ref, "persistence_prob"].mode().iloc[0])
+            rate_when_above = float(sub.loc[~state_now_ref, "persistence_prob"].mode().iloc[0])
+            ok &= report(
+                f"{name}: calibrated persistence P(drought ahead | drought now) > "
+                "P(drought ahead | no drought now)",
+                True, rate_when_below > rate_when_above,
+            )
+            print(f"  [INFO    ] {name}: persistence_prob calibrated rates - "
+                  f"P(future<thr | now<thr)={rate_when_below:.4f}, "
+                  f"P(future<thr | now>=thr)={rate_when_above:.4f}")
 
     # E: C3S row exists and is shaped null-with-reason, never silently dropped.
     c3s_status = config["c3s_raw_status"]

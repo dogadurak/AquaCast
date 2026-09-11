@@ -1,25 +1,26 @@
 {
-  "generated_utc": "2026-09-11T10:42:26+00:00",
+  "generated_utc": "2026-09-11T15:35:23+00:00",
   "provenance": {
-    "git_sha": "300a3b575931aeaefab39ff46d58df4f13e6d580",
+    "git_sha": "53ddf2686b50dd43c82199973c39611b89fcbddc",
     "git_dirty": true,
     "git_dirty_files": [
-      "reports/training_summary.json",
+      "onfig/model.yaml",
+      "reports/baselines_summary.json",
+      "reports/phase0_log.md",
+      "src/eval/skill.py",
       "src/features/build.py",
-      "src/models/train.py"
+      "src/models/baselines.py"
     ],
-    "producers_dirty": [
-      "src/models/train.py"
-    ],
+    "producers_dirty": [],
     "code_tree": {
-      "src": "771b9f61740c41da53a40a41d93bfb1e00f4f40e",
-      "config": "d4841d9421911ea5ee9e9814f5705a6456b98bb0"
+      "src": "acd385df73e3b6d183761c695ac300d53db50530",
+      "config": "05073d5941e7b1146cad2d4d32968a1442647786"
     },
     "producers": [
       "src/models/train.py",
       "config/model.yaml"
     ],
-    "producer_digest": "eeaa86af086206ac"
+    "producer_digest": "30962d8c64722914"
   },
   "train_period": [
     "2001-01-01",
@@ -33,40 +34,49 @@
     "2022-01-01",
     "2025-12-31"
   ],
-  "n_features": 38,
+  "n_features": 47,
   "feature_columns": [
+    "precip_chirps_mm_lag0",
     "precip_chirps_mm_lag1",
     "precip_chirps_mm_lag2",
     "precip_chirps_mm_lag3",
     "precip_chirps_mm_lag6",
+    "spi_1_lag0",
     "spi_1_lag1",
     "spi_1_lag2",
     "spi_1_lag3",
     "spi_1_lag6",
+    "spi_3_lag0",
     "spi_3_lag1",
     "spi_3_lag2",
     "spi_3_lag3",
     "spi_3_lag6",
+    "t2m_c_lag0",
     "t2m_c_lag1",
     "t2m_c_lag2",
     "t2m_c_lag3",
     "t2m_c_lag6",
+    "swvl1_lag0",
     "swvl1_lag1",
     "swvl1_lag2",
     "swvl1_lag3",
     "swvl1_lag6",
+    "swvl2_lag0",
     "swvl2_lag1",
     "swvl2_lag2",
     "swvl2_lag3",
     "swvl2_lag6",
+    "swvl3_lag0",
     "swvl3_lag1",
     "swvl3_lag2",
     "swvl3_lag3",
     "swvl3_lag6",
+    "swvl4_lag0",
     "swvl4_lag1",
     "swvl4_lag2",
     "swvl4_lag3",
     "swvl4_lag6",
+    "pet_era5_mm_lag0",
     "pet_era5_mm_lag1",
     "pet_era5_mm_lag2",
     "pet_era5_mm_lag3",

@@ -35,6 +35,7 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+from scipy import stats
 from sklearn.metrics import brier_score_loss, r2_score, roc_auc_score
 
 from src.data.gee_io import ROOT, load_config, provenance
@@ -90,25 +91,36 @@ def per_date_regression_metrics(df: pd.DataFrame, actual_col: str, pred_col: str
 
 def per_date_classification_metrics(
     df: pd.DataFrame, actual_col: str, pred_col: str,
-) -> tuple[pd.DataFrame, list[str]]:
-    """Returns (per-date metrics, dates dropped for having a single class present).
+) -> tuple[pd.DataFrame, list[str], list[str]]:
+    """Returns (per-date metrics, dates dropped entirely, dates with AUC undefined).
 
     AUC is undefined with one class in a date's cells - which happens here: SPI-3
     below threshold is a ~15-25% event, so over ~45 test months some will show it
     nowhere in the basin (rate=0) or almost everywhere at once during a widespread
-    event (rate=1). Dropped explicitly and counted, not silently thinned - the drop
-    count is itself part of what a ~45-month test period can honestly support.
+    event (rate=1). Brier is NOT undefined in that case - it is a proper scoring
+    rule against a 0/1 outcome regardless of whether the date's cells are all one
+    class - so a single-class date drops `auc` to NaN (skipped by summarise()'s
+    mean) but keeps its `brier` row. This was a real defect until the skeptic audit
+    found it: the old code dropped BOTH metrics together on a single-class-only
+    condition, silently discarding Brier on the 2 widest-spread drought months in
+    the test period (2023-01, 2025-03, both rate=1.0) along with 8 driest ones -
+    22% of the record, from a table whose whole point is not silently thinning data.
+    `dates_dropped_entirely` still exists for the <10-cells case, where nothing is
+    computable.
     """
-    rows, dropped = [], []
+    rows, dropped_entirely, auc_undefined = [], [], []
     for date, g in df.groupby("date"):
         g = g.dropna(subset=[actual_col, pred_col])
-        if len(g) < 10 or g[actual_col].nunique() < 2:
-            dropped.append(str(pd.Timestamp(date).date()))
+        if len(g) < 10:  # too few analysis cells that date to trust anything
+            dropped_entirely.append(str(pd.Timestamp(date).date()))
             continue
-        auc = roc_auc_score(g[actual_col], g[pred_col])
+        single_class = g[actual_col].nunique() < 2
+        if single_class:
+            auc_undefined.append(str(pd.Timestamp(date).date()))
+        auc = np.nan if single_class else roc_auc_score(g[actual_col], g[pred_col])
         brier = brier_score_loss(g[actual_col], g[pred_col])
         rows.append({"date": date, "n_cells": len(g), "auc": auc, "brier": brier})
-    return pd.DataFrame(rows), dropped
+    return pd.DataFrame(rows), dropped_entirely, auc_undefined
 
 
 def summarise(per_date: pd.DataFrame, cols: list[str]) -> dict[str, float]:
@@ -117,32 +129,102 @@ def summarise(per_date: pd.DataFrame, cols: list[str]) -> dict[str, float]:
 
 
 # --------------------------------------------------------------------------
-def build_regression_row(df: pd.DataFrame, pred_col: str, label: str) -> dict[str, Any]:
-    """`df` must carry 'date', 'actual' and `pred_col`. One row = one method's summary."""
+def build_regression_row(
+    df: pd.DataFrame, pred_col: str, label: str,
+) -> tuple[dict[str, Any], pd.DataFrame]:
+    """`df` must carry 'date', 'actual' and `pred_col`. One row = one method's summary.
+
+    Returns the per-date DataFrame too (indexed by date) - not for the table, for
+    the paired significance test in build_target_table, which needs the model's
+    and a baseline's per-date series aligned on the SAME dates, not just their
+    already-averaged means.
+    """
     per_date = per_date_regression_metrics(df, "actual", pred_col)
     summary = summarise(per_date, ["mae", "rmse", "r2"])
     summary["method"] = label
     summary["n_dates"] = int(len(per_date))
-    return summary
+    return summary, per_date.set_index("date") if len(per_date) else per_date
 
 
 def build_classification_row(
     df: pd.DataFrame, pred_col: str, label: str,
-) -> dict[str, Any]:
-    per_date, dropped_dates = per_date_classification_metrics(df, "actual_prob", pred_col)
+) -> tuple[dict[str, Any], pd.DataFrame]:
+    per_date, dropped_entirely, auc_undefined = per_date_classification_metrics(
+        df, "actual_prob", pred_col
+    )
     summary = summarise(per_date, ["auc", "brier"])
     summary["method"] = label
+    # Brier's own denominator: every date with >=10 cells, single-class included.
     summary["n_dates"] = int(len(per_date))
-    summary["n_dates_dropped_single_class"] = len(dropped_dates)
-    summary["dates_dropped_single_class"] = dropped_dates
-    return summary
+    # AUC's own denominator: single-class dates are excluded from just this mean.
+    summary["n_dates_auc"] = int(len(per_date) - len(auc_undefined))
+    summary["n_dates_dropped_entirely"] = len(dropped_entirely)
+    summary["n_dates_auc_undefined"] = len(auc_undefined)
+    summary["dates_auc_undefined"] = auc_undefined
+    return summary, per_date.set_index("date") if len(per_date) else per_date
 
 
 def skill_score(model_val: float, baseline_val: float) -> float:
-    """1 - error_model/error_baseline. Positive = model beats the baseline."""
+    """1 - error_model/error_baseline. Positive = MODEL beats THIS baseline.
+
+    The return value is the MODEL's skill relative to the baseline passed in -
+    it is stored on the baseline's own table row (there is nowhere else to put
+    a per-baseline number), which the skeptic audit flagged as a real defect in
+    the RENDERED table, not in this arithmetic: `render_markdown` printed it
+    under a "(vs model)" suffix on the climatology row, which a reader parses as
+    "climatology's skill against the model" - the opposite of what the number
+    means. E.g. spi_1@+1: skill_score(model_rmse=0.886, climatology_rmse=0.791)
+    = -0.120, correctly meaning the MODEL is 12% worse than climatology - but
+    rendered as "climatology ... skill -0.120 (vs model)" it reads as
+    "climatology is 12% worse than the model", backwards. Fixed by relabelling
+    in render_markdown (column header states whose skill it is, no per-cell
+    "(vs X)" suffix that can be read either direction) rather than by negating
+    the arithmetic, which is correct as written.
+    """
     if baseline_val in (0, None) or np.isnan(baseline_val) or np.isnan(model_val):
         return float("nan")
     return 1.0 - model_val / baseline_val
+
+
+def paired_significance(model_series: pd.Series, baseline_series: pd.Series) -> dict[str, Any]:
+    """Paired test of model vs baseline on the SAME per-date metric values, not on
+    the two already-averaged means the table prints.
+
+    Added after the skeptic audit: every headline number in this table was a mean
+    over ~35-47 dates with no measure of whether the two methods' means are
+    distinguishable at all - "beats persistence" and "loses to climatology" were
+    both stated as if certain. A paired t-test AND Wilcoxon signed-rank (the
+    t-test's distribution-free counterpart, since n~40 and per-date errors are not
+    obviously normal) are both reported; they should roughly agree, and a
+    disagreement between them is itself worth noticing rather than picking whichever
+    gives the smaller p-value.
+
+    WHAT THIS DOES NOT FIX, stated rather than hidden: consecutive SPI-3 forecast
+    dates share up to 2 of their 3 accumulation months, so the ~35-45 test dates
+    are NOT independent draws - both tests assume independence, so these p-values
+    are optimistic (too small), not rigorous. Treat them as "is the gap even
+    plausibly bigger than noise", not as a formal significance claim.
+    """
+    common = model_series.index.intersection(baseline_series.index)
+    m = model_series.loc[common].to_numpy()
+    b = baseline_series.loc[common].to_numpy()
+    finite = np.isfinite(m) & np.isfinite(b)
+    m, b = m[finite], b[finite]
+    if len(m) < 5 or np.allclose(m, b):
+        return {"n_paired": int(len(m)), "p_ttest": float("nan"), "p_wilcoxon": float("nan")}
+    t_res = stats.ttest_rel(m, b)
+    try:
+        w_res = stats.wilcoxon(m, b)
+        p_wilcoxon = float(w_res.pvalue)
+    except ValueError:
+        # all differences zero, or too few non-zero differences - wilcoxon refuses
+        p_wilcoxon = float("nan")
+    return {
+        "n_paired": int(len(m)),
+        "mean_diff_model_minus_baseline": float(np.mean(m - b)),
+        "p_ttest": float(t_res.pvalue),
+        "p_wilcoxon": p_wilcoxon,
+    }
 
 
 # --------------------------------------------------------------------------
@@ -214,43 +296,71 @@ def build_target_table(
     result: dict[str, Any] = {"target": name, "lead_months": lead, "kind": kind}
 
     if kind == "regression":
-        rows = [build_regression_row(pred, "prediction", "model")]
+        model_row, model_per_date = build_regression_row(pred, "prediction", "model")
+        rows = [model_row]
+        per_date_by_method = {"model": model_per_date}
         for base_col, label in [
             ("climatology", "climatology"), ("persistence", "persistence"),
             ("known_accumulation", "known_accumulation"),
         ]:
-            rows.append(build_regression_row(base, base_col, label))
+            r, pd_r = build_regression_row(base, base_col, label)
+            rows.append(r)
+            per_date_by_method[label] = pd_r
         rows.append({"method": "c3s_raw", "mae": float("nan"), "rmse": float("nan"),
                      "r2": float("nan"), "n_dates": 0})
         result["rows"] = rows
         model_rmse = rows[0]["rmse"]
         model_mae = rows[0]["mae"]
+        # Stored on each BASELINE's row (there is nowhere else to put a per-baseline
+        # number), but the key name says whose skill it is: "model_skill_rmse" on
+        # the climatology row is unambiguously "the MODEL's skill, measured against
+        # climatology" - not "climatology's skill". See skill_score()'s docstring;
+        # this naming is the actual fix for the sign-reads-backwards defect the
+        # skeptic audit found, the arithmetic underneath was already correct.
         for r in rows[1:]:
             if r["method"] == "c3s_raw":
-                r["skill_rmse_vs_model"] = None
-                r["skill_mae_vs_model"] = None
+                r["model_skill_rmse"] = None
+                r["model_skill_mae"] = None
                 continue
-            r["skill_rmse_vs_model"] = skill_score(model_rmse, r["rmse"])
-            r["skill_mae_vs_model"] = skill_score(model_mae, r["mae"])
+            r["model_skill_rmse"] = skill_score(model_rmse, r["rmse"])
+            r["model_skill_mae"] = skill_score(model_mae, r["mae"])
             r["r2_diff_vs_model"] = (rows[0]["r2"] - r["r2"]) if not np.isnan(r["r2"]) else None
+            # Paired on MAE, the metric with a direct per-date physical unit (SPI
+            # units of error), not RMSE (dominated by whichever date has the worst
+            # spatial spread) - see paired_significance()'s docstring for the
+            # independence caveat this does NOT resolve.
+            r["significance"] = paired_significance(
+                per_date_by_method["model"]["mae"], per_date_by_method[r["method"]]["mae"]
+            )
 
     else:  # classification
-        rows = [build_classification_row(pred.rename(columns={"actual": "actual_prob",
-                                                                "prediction": "prediction"}),
-                                          "prediction", "model")]
+        model_row, model_per_date = build_classification_row(
+            pred.rename(columns={"actual": "actual_prob", "prediction": "prediction"}),
+            "prediction", "model",
+        )
+        rows = [model_row]
+        per_date_by_method = {"model": model_per_date}
         for base_col, label in [
             ("climatology_prob", "climatology"), ("persistence_prob", "persistence"),
             ("known_accumulation_prob", "known_accumulation"),
         ]:
-            rows.append(build_classification_row(base, base_col, label))
+            r, pd_r = build_classification_row(base, base_col, label)
+            rows.append(r)
+            per_date_by_method[label] = pd_r
         rows.append({"method": "c3s_raw", "auc": float("nan"), "brier": float("nan"), "n_dates": 0})
         result["rows"] = rows
         model_brier = rows[0]["brier"]
         for r in rows[1:]:
             if r["method"] == "c3s_raw":
-                r["bss_vs_model"] = None
+                r["model_bss"] = None
                 continue
-            r["bss_vs_model"] = skill_score(model_brier, r["brier"])
+            # model_bss on the climatology row = the MODEL's Brier Skill Score
+            # measured against climatology - same naming fix as model_skill_rmse
+            # above, same underlying arithmetic (skill_score's docstring).
+            r["model_bss"] = skill_score(model_brier, r["brier"])
+            r["significance"] = paired_significance(
+                per_date_by_method["model"]["brier"], per_date_by_method[r["method"]]["brier"]
+            )
 
     return result
 
@@ -273,11 +383,29 @@ def render_markdown(tables: list[dict[str, Any]], config: dict[str, Any], pop_si
         lines.append(f"## {t['target']} @ +{t['lead_months']} month(s) ({t['kind']})")
         lines.append("")
         if t["kind"] == "regression":
-            lines.append("| method | MAE | RMSE | R² | skill (RMSE) | skill (MAE) | n dates |")
-            lines.append("|---|---|---|---|---|---|---|")
+            # Column headers state WHOSE skill this is - "model skill (RMSE)" is
+            # unambiguous on every row, including the baseline rows it's computed
+            # against. Previously "skill (RMSE)" with a per-cell "(vs model)" suffix
+            # printed on the climatology row read as "climatology's skill against
+            # the model", backwards from its actual meaning; the skeptic audit
+            # caught this as a rendering defect, not an arithmetic one - see
+            # skill_score()'s docstring. Positive = the model beats that row.
+            # "p (MAE, paired)" tests whether the model's and this row's per-date MAE
+            # series actually differ - added after the skeptic audit found every
+            # skill number here was a bare mean over ~47 dates with no test of
+            # whether it's distinguishable from noise. See paired_significance()'s
+            # docstring: n is small and dates are NOT independent (SPI-1 has no
+            # accumulation overlap, but the underlying weather is autocorrelated
+            # month to month), so read a small p as "worth taking seriously", not
+            # as a formal significance claim.
+            lines.append(
+                "| method | MAE | RMSE | R² | model skill (RMSE) | model skill (MAE) | "
+                "p (MAE, paired t / Wilcoxon) | n dates |"
+            )
+            lines.append("|---|---|---|---|---|---|---|---|")
             for r in t["rows"]:
-                skill_r = r.get("skill_rmse_vs_model")
-                skill_m = r.get("skill_mae_vs_model")
+                skill_r = r.get("model_skill_rmse")
+                skill_m = r.get("model_skill_mae")
                 note = ""
                 if r["method"] == "known_accumulation":
                     note = " *"
@@ -288,17 +416,33 @@ def render_markdown(tables: list[dict[str, Any]], config: dict[str, Any], pop_si
                 mae = r["mae"] if not np.isnan(r["mae"]) else float("nan")
                 rmse = r["rmse"] if not np.isnan(r["rmse"]) else float("nan")
                 r2 = r.get("r2", float("nan"))
+                sig = r.get("significance")
+                p_s = "—"
+                if sig and not np.isnan(sig.get("p_ttest", float("nan"))):
+                    p_s = f"{sig['p_ttest']:.3f} / {sig['p_wilcoxon']:.3f}"
+                if r["method"] == "model":
+                    skill_r_s = skill_m_s = "—"  # a method has no skill score against itself
                 lines.append(
                     f"| {r['method']}{note} | {mae:.4f} | {rmse:.4f} | "
-                    f"{r2:.4f} | {skill_r_s} (vs model) | {skill_m_s} (vs model) | {r['n_dates']} |"
+                    f"{r2:.4f} | {skill_r_s} | {skill_m_s} | {p_s} | {r['n_dates']} |"
                 )
         else:
-            drop_note = t["rows"][0].get("n_dates_dropped_single_class", 0)
-            lines.append(f"| method | AUC | Brier | BSS (vs model) | n dates ({drop_note} of "
-                         f"{t['rows'][0]['n_dates'] + drop_note} dropped - single class present) |")
+            # AUC and Brier have DIFFERENT denominators here: AUC is undefined on a
+            # single-class date (all cells drought or none), Brier is not - fixed
+            # after the skeptic audit found single-class dates were dropping BOTH
+            # metrics together, silently discarding Brier (and both widest-spread
+            # drought months, 2023-01 and 2025-03) on ~22% of the test record. See
+            # per_date_classification_metrics()'s docstring.
+            model_row = t["rows"][0]
+            n_brier, n_auc = model_row["n_dates"], model_row["n_dates_auc"]
+            n_auc_undefined = model_row["n_dates_auc_undefined"]
+            lines.append(
+                f"| method | AUC (n={n_auc}) | Brier (n={n_brier}) | model BSS | "
+                "p (Brier, paired t / Wilcoxon) |"
+            )
             lines.append("|---|---|---|---|---|")
             for r in t["rows"]:
-                bss = r.get("bss_vs_model")
+                bss = r.get("model_bss")
                 note = ""
                 if r["method"] == "known_accumulation":
                     note = " *"
@@ -307,9 +451,24 @@ def render_markdown(tables: list[dict[str, Any]], config: dict[str, Any], pop_si
                 if r["method"] == "persistence":
                     note += " ‡"
                 bss_s = f"{bss:+.3f}" if bss is not None and not np.isnan(bss) else "N/A"
+                sig = r.get("significance")
+                p_s = "—"
+                if sig and not np.isnan(sig.get("p_ttest", float("nan"))):
+                    p_s = f"{sig['p_ttest']:.3f} / {sig['p_wilcoxon']:.3f}"
+                if r["method"] == "model":
+                    bss_s = "—"
                 auc = r["auc"] if not np.isnan(r["auc"]) else float("nan")
                 brier = r["brier"] if not np.isnan(r["brier"]) else float("nan")
-                lines.append(f"| {r['method']}{note} | {auc:.4f} | {brier:.4f} | {bss_s} | {r['n_dates']} |")
+                lines.append(f"| {r['method']}{note} | {auc:.4f} | {brier:.4f} | {bss_s} | {p_s} |")
+            lines.append("")
+            lines.append(
+                f"AUC excludes {n_auc_undefined} of {n_brier} test dates where every "
+                "analysis cell fell in the same class (basin-wide drought or none) - "
+                "undefined for AUC, not for Brier, which scores all "
+                f"{n_brier} dates including those. Dropped for both metrics: "
+                f"{model_row['n_dates_dropped_entirely']} date(s) with fewer than "
+                "10 analysis cells."
+            )
         lines.append("")
 
     lines += [
@@ -322,6 +481,20 @@ def render_markdown(tables: list[dict[str, Any]], config: dict[str, Any], pop_si
         f"† {config['c3s_raw_status']['reason']}",
         "",
         f"‡ {config['persistence_auc_note'].strip()}",
+        "",
+        "**What the p-values do and do not establish.** Paired t-test and Wilcoxon "
+        "signed-rank, computed on the model's and each baseline's per-date metric "
+        "series aligned on the SAME test dates - not a test of the two already-"
+        "averaged means printed in the table. Both assume the paired differences "
+        "are independent across dates, which they are NOT here: consecutive test "
+        "months share autocorrelated weather (spi_3's own accumulation window "
+        "adds direct overlap between neighbouring dates on top of that). So a "
+        "p-value here is optimistic - smaller than it would be for truly "
+        "independent dates - and should be read as \"is this gap even plausibly "
+        "bigger than noise\", not as a formal significance claim. Added after the "
+        "skeptic audit found every skill number in earlier versions of this table "
+        "was a bare mean with nothing to say whether the two methods were "
+        "distinguishable at all.",
         "",
         "Reliability diagrams and spatially blocked CV are Phase 3 work "
         "(reports/phase0_log.md list B), not computed here.",

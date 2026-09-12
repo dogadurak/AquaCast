@@ -1,17 +1,17 @@
 {
-  "generated_utc": "2026-09-10T22:55:57+00:00",
+  "generated_utc": "2026-09-12T01:04:30+00:00",
   "provenance": {
-    "git_sha": "c6f6d625439436b9263e6bd3377518d48f99cad0",
+    "git_sha": "53a7a559e0a64c797a9cdb628dd12cdaf3d83d30",
     "git_dirty": true,
     "git_dirty_files": [
-      "src/features/spi.py"
+      "akefile",
+      "docs/data_dictionary.md",
+      "reports/panel_integrity.json"
     ],
-    "producers_dirty": [
-      "src/features/spi.py"
-    ],
+    "producers_dirty": [],
     "code_tree": {
-      "src": "a5189be646238cc65e64f9936f7cf7b58c220442",
-      "config": "db476d30e5dfaaaa5d76d27a1cf863df201a3951"
+      "src": "16e5371434ace174098ee352fe3fd560554ef4dd",
+      "config": "c1968044dbd25b78455ba457f93f86d503bed7fe"
     },
     "producers": [
       "src/features/spi.py",

@@ -4,8 +4,13 @@ Every column the pipeline produces is documented here with units, source, native
 resolution, and known biases. A column that is not documented here does not exist
 as far as the rest of the pipeline is concerned.
 
-Status: **T1 complete.** Panel columns (`data/processed/panel_monthly.parquet`)
-are filled in at T4.
+Status: **Phase 0 (T0-T8) complete.** §1-2 (grid, CHIRPS, ERA5-Land, resolution)
+written at T1-T3. §3 (panel) filled in at T4, extended at T5 (SPI). §4
+(`baselines_monthly.parquet`) and §5 (`predictions.parquet`) added at T6-T8, when
+those files started existing as pipeline outputs in their own right - per this
+file's own rule above, a column not documented here does not exist, and neither
+did these two files until now despite being read directly by anyone checking the
+skill table's numbers.
 
 ---
 
@@ -337,7 +342,12 @@ A 0.05° cell fed by 9 km ERA5-Land carries 9 km information. Recorded per colum
 
 ## 3. Monthly panel — `data/processed/panel_monthly.parquet`
 
-*Filled in at T4.* Schema is defined in `CLAUDE.md`. Notes already fixed:
+**Full column list and dtypes are the authoritative contract in `CLAUDE.md`**
+("Data contract" section, versioned by phase) — not duplicated here, so the two
+documents cannot silently drift apart. This section carries only what CLAUDE.md's
+contract does not: derivation notes, biases, and what each column is not.
+
+2,820 cells × 540 months = 1,522,800 rows, one row per (`cell_id`, `date`).
 
 - The panel spans **1981–2025** while MODIS columns begin in **2001**. Rows for
   1981–2000 are kept with MODIS columns null and `ndvi_available`, `et_available`,
@@ -348,3 +358,139 @@ A 0.05° cell fed by 9 km ERA5-Land carries 9 km information. Recorded per colum
   overlaps validation. See `PROJECT_SPEC.md` §4.2.
 - A 1981 reference start includes pre-warming years, so recent anomalies read drier
   than against a recent normal. Correct, but stated wherever anomalies appear.
+
+### 3.1 `spi_1`, `spi_3` — added at T5, gamma-fit on the reference period
+
+Computed by `src/features/spi.py`, delegating to `climate_indices.indices.spi()`
+with `calibration_year_initial`/`calibration_year_final` set to
+`baseline_precip_era5` (1981–2016) as SEPARATE arguments from `data_start_year` —
+the fit period and the applied-to period are never the same argument, so mixing
+them is a different call, not a silently wrong default. Applied to the full
+1981–2025 series once fit.
+
+### 3.2 `spi1_mm_per_unit`, `spi3_mm_per_unit` — a measurement, not a threshold
+
+Per (cell, calendar month): millimetres of precipitation needed to move that
+column's SPI by one unit, from the same reference-period gamma fit. Exists
+because the standard Wu et al. (2007) zero-frequency reliability criterion
+**inverts** on this basin (see `reports/spi_reliability_note.md`): CHIRPS's
+known low-amount overestimation erases the zeros that criterion looks for, so it
+clears the broken summer months and flags the reliable winter ones.
+
+Per this project's repeated pattern (`in_hydrobasins`, `crop_frac_2021`): the
+MEASUREMENT is a panel column, correct and unconditional; the DECISION (which
+sensitivity counts as "unreliable") lives in `config/model.yaml`'s
+`spi_reliability` block, not baked into the data. Skill is reported **binned** by
+this column (`report_bins_mm`), never gated by a threshold frozen into the panel.
+
+---
+
+## 4. Baselines — `data/processed/baselines_monthly.parquet`
+
+Produced by `python -m src.models.baselines` (T6). 3,045,600 rows = 1,522,800
+panel rows × 2 approved targets (`spi_3`, `spi_1`) — **not** filtered to the
+1,823-cell analysis population; that filter is applied at scoring time
+(`src/eval/skill.py`), except for one internal fit (§4.3).
+
+`date` here is the target's own **VERIFICATION date** — the month a row's
+`actual` describes — not an issue date. See §5 for why this matters and how the
+two files' date conventions were confirmed to disagree on purpose.
+
+| Column | Type | Meaning |
+|---|---|---|
+| `cell_id`, `date` | int64, datetime | join keys |
+| `target` | str | `"spi_3"` or `"spi_1"` |
+| `lead_months` | int | 3 or 1 |
+| `kind` | str | `"classification"` or `"regression"` |
+| `actual` | float64 | `panel[target]` at this row's own date |
+| `climatology` | float64 | reference-period (cell, calendar-month) mean of `target` |
+| `persistence` | float64 | `target` observed `lead_months` earlier — the value actually known at issue time |
+| `known_accumulation` | float64 | identical to `climatology` for every approved pair (zero accumulation overlap — see §4.1's note in `config/model.yaml`) |
+| `c3s_raw` | float64 | always null — CDS access pending, see `config/model.yaml` `c3s_raw_status` |
+| `actual_prob` | float64, `spi_3` only | `(target < threshold)`, the binary drought indicator this row's date resolves to |
+| `climatology_prob` | float64, `spi_3` only | empirical P(target < threshold) per (cell, calendar month), reference period |
+| `persistence_prob` | float64, `spi_3` only | CALIBRATED — see §4.3, not the hard 0/1 an earlier version used |
+| `known_accumulation_prob` | float64, `spi_3` only | identical to `climatology_prob`, same zero-overlap reasoning |
+| `c3s_raw_prob` | float64, `spi_3` only | always null |
+
+### 4.1 Why `known_accumulation` always equals `climatology` here
+
+Every approved (target, lead) pair has zero accumulation overlap (`k - lead = 0`:
+spi_1@+1, spi_3@+3). With nothing observed to condition on, the known-accumulation
+estimator reduces exactly to climatology — by design, not a bug, and computed by
+an independently-written code path specifically so the numeric match is evidence
+rather than one function calling the other. Verified by
+`tests/test_leakage.py::test_known_accumulation_baseline_matches_climatology_numerically`.
+
+### 4.2 `persistence_prob` is calibrated, not a coin flip dressed as a probability
+
+A hard 0/1 step function (today's state, carried forward) is a Brier
+worst-case by construction on a ~15-25% base-rate event — using it inflated
+"model beats persistence" into mostly an artefact of the baseline being
+deliberately uncalibrated. Replaced with an empirically fit P(drought ahead |
+drought now), estimated basin-wide (not per cell — a per-cell 2-state table would
+starve some cells of both classes over 36 years) on the reference period only.
+
+### 4.3 The ONE place a baseline's fit is population-restricted
+
+`persistence_prob`'s fit is the only baseline computation restricted to the
+1,823-cell analysis population (`in_hydrobasins & ~in_akarcay_lobe &
+crop_frac_2021 >= 0.5`) rather than the full 2,820-cell panel. `climatology`
+fits **per cell**, so a boundary-ring cell's own mean never reaches an analysis
+cell's forecast regardless of which cells are in the input frame. `persistence`'s
+calibration is a single POOLED basin-wide rate, so without this restriction the
+ring's statistics leak into the number applied to every analysis cell — found
+during the second skeptic audit of T8, not anticipated when the baseline was
+first written. The APPLICATION (one row per panel cell) is unrestricted, per the
+one-row-per-`(cell_id, date)` contract.
+
+### 4.4 NaN means "unknown", not "not in drought"
+
+A bare `series < threshold` reads `NaN` as `False` (pandas/numpy comparison
+semantics) — silently, with no error. `persistence_prob` and its fit therefore go
+through `_below_threshold()` (`src/models/baselines.py`), which keeps a missing
+value missing. Before this fix, 14,100 rows in 1981's warm-up window (where the
+continuous `persistence` column is correctly null) carried a real-looking
+`persistence_prob` value instead of null — a silent-corruption-class bug that
+never touched the test-period metrics but would have on a target with interior
+gaps.
+
+---
+
+## 5. Predictions — `data/processed/predictions.parquet`
+
+Produced by `python -m src.models.train` (T7). 1,545,360 rows: every
+(cell, month, target) combination the model could be SCORED on across
+train+validation+test (not just test), so the leakage tests and the split
+assertions have train/validation rows to check too.
+
+| Column | Type | Meaning |
+|---|---|---|
+| `cell_id`, `date` | int64, datetime | `date` is the forecast **ISSUE** date — see below, this is the opposite convention from §4 |
+| `target`, `lead_months`, `kind` | — | same meaning as §4 |
+| `actual` | float64 | the quantity `prediction` estimates: binary {0,1} for classification, raw value for regression — NOT always the raw SPI value (see 5.2) |
+| `actual_raw_spi` | float64 | the raw SPI value at `date + lead_months`, kept alongside `actual` even for classification targets |
+| `prediction` | float64 | XGBoost's output: `predict_proba(...)[:,1]` for classification, `predict(...)` for regression |
+| `split` | str | `"train"`, `"validation"`, `"test"`, or `"none"` |
+
+### 5.1 `date` is the ISSUE date here, the VERIFICATION date in §4 — read this before joining the two files
+
+`predictions.parquet`'s `date` is the month the forecast was ISSUED from;
+`baselines_monthly.parquet`'s `date` is the month the forecast is ABOUT. A row
+with `date = 2023-01-01` and `lead_months = 3` means "issued 2023-01, verifies
+2023-04" in this file, and "this row IS the verification for 2023-01" in §4's
+file. Comparing the two on raw `date` silently pairs the wrong months — caught
+building T8, proven empirically (shifting `predictions`' date forward by
+`lead_months` reproduces §4's date-indexed series with a 45/45 exact match), and
+guarded permanently by an assertion in `src/eval/skill.py` that the two files'
+`actual` values agree on every date they're aligned to.
+
+### 5.2 Why `actual` and `actual_raw_spi` are both stored
+
+For a classification target, `actual` is the {0,1} indicator `prediction`
+estimates — not the SPI value. Storing the raw SPI value in `actual` for a
+classification target was a real bug caught before T8 shipped: every downstream
+AUC/Brier computation would have silently scored a probability against a
+continuous number. `actual_raw_spi` keeps the raw value available anyway, for
+anyone who wants it, under a name that cannot be confused with the scoring
+target.

@@ -1,20 +1,15 @@
 {
-  "generated_utc": "2026-09-10T16:56:21+00:00",
+  "generated_utc": "2026-09-12T00:54:44+00:00",
   "provenance_of_this_build": {
-    "git_sha": "f9caa9c188acc43ab4663bfc21aeed95827ad544",
+    "git_sha": "53a7a559e0a64c797a9cdb628dd12cdaf3d83d30",
     "git_dirty": true,
     "git_dirty_files": [
-      "rc/data/build_panel.py",
-      "src/data/export_chirps.py",
-      "src/data/gee_io.py",
-      "reports/panel_integrity.json"
+      "ocs/data_dictionary.md"
     ],
-    "producers_dirty": [
-      "src/data/gee_io.py"
-    ],
+    "producers_dirty": [],
     "code_tree": {
-      "src": "d2f95f2ee26cd67ed22443c8a3d8d148ce640082",
-      "config": "db476d30e5dfaaaa5d76d27a1cf863df201a3951"
+      "src": "16e5371434ace174098ee352fe3fd560554ef4dd",
+      "config": "c1968044dbd25b78455ba457f93f86d503bed7fe"
     },
     "producers": [
       "src/data/build_panel.py",

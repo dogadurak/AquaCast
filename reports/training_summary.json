@@ -1,10 +1,14 @@
 {
-  "generated_utc": "2026-09-11T20:48:45+00:00",
+  "generated_utc": "2026-09-12T01:06:37+00:00",
   "provenance": {
-    "git_sha": "fbb58d26e283658d6fee6938173aa85c701e22d2",
+    "git_sha": "53a7a559e0a64c797a9cdb628dd12cdaf3d83d30",
     "git_dirty": true,
     "git_dirty_files": [
-      "eports/baselines_summary.json"
+      "akefile",
+      "docs/data_dictionary.md",
+      "reports/baselines_summary.json",
+      "reports/panel_integrity.json",
+      "reports/spi_validation.json"
     ],
     "producers_dirty": [],
     "code_tree": {

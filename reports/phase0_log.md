@@ -806,3 +806,62 @@ guclendirdi.
 sonraki: kullaniciya bu turun ozeti raporlanacak, uçuncu bir skeptic turu
 gerekip gerekmedigi (kullaniciya soruldu, muhtemelen gerekmez - bu turun
 bulgulari kucuk/dogrulanabilir nitelikte) ve /phase-gate karari.
+
+---
+
+## Faz 1 baslangici - CDS-bagimsiz kisim
+
+Faz 0 kapisi gecti (bkz. yukaridaki gate raporu). Kullanicinin secimiyle CDS
+token gerektirmeyen Faz 1 isleri once ele alindi.
+
+**(1) KRITIK BULGU - `Makefile` hicbir zaman calismiyordu.** `make data` var
+olmayan bir `--config` bayragi geciyordu (build_panel.py hicbir CLI argumani
+parse etmiyor - config yolu icerde load_config() ile okunuyor, bayrak
+sessizce yoksayiliyordu ama YANLISLIKLA bir sey yapiyormus gibi
+GORUNUYORDU). `features` ve `eval` hedefleri HIC VAR OLMAYAN modullere
+(`src.features.build_features`, `src.eval.evaluate`) isaret ediyordu - ilk
+proje iskeletinden kalma, Faz 0 boyunca hic `make` ile calisilmadigi icin
+(her adim dogrudan `python -m ...` ile cagirildi) hic yakalanmamis. AYRICA:
+bu makinada `make` komutu hic KURULU DEGIL (PATH'te yok) - kullaniciya
+bildirilmesi gereken bir ortam eksigi, Faz 1'in kendi kapi kriteri ("make
+data panel'i sifirdan uretir") bu makinada su an harfiyen calistirilamiyor.
+
+Duzeltme: Makefile gercek modullere (grid, export_chirps, export_era5,
+build_panel, spi, baselines, train, skill) isaret edecek sekilde yeniden
+yazildi. GEE'ye dokunan (export-chirps, export-era5) adimlar, LOKAL/hizli
+adimlardan (panel, spi - zaten export edilmis CSV'leri okuyor) AYRI
+hedeflere bolundu - `make data` artik sadece lokal, hizli adimlari calistirir,
+GEE kotasi tuketen saatlerce surebilecek bir isi sessizce tetiklemez.
+
+**(2) GERCEK UCTAN UCA TEKRAR-URETILEBILIRLIK KANITI (planlanmamis ama
+degerli).** Makefile'i test ederken `python -m src.data.build_panel
+--config config/data.yaml` calistirildi - fazladan bayrak sessizce
+yoksayildi ve panel GERCEKTEN HAM CHIRPS/ERA5 export'larindan SIFIRDAN
+yeniden insa edildi (spi_1/spi_3 sutunlari bu adimda yok, cunku onlar ayri
+bir adimda ekleniyor - beklenen davranis). Bunun uzerine TUM zinciri
+(spi.py -> baselines.py -> train.py -> skill.py) sifirdan calistirdim.
+Sonuc: `reports/skill_table.md` bir onceki (panel_monthly.parquet'in
+onceden var olan halinden uretilmis) versiyonla **BYTE-BYTE OZDES** cikti.
+
+Bu, bir onceki "temiz HEAD'den yeniden uretim" kanitindan DAHA GUCLU: o
+sefer sadece KOD'un ayni panel dosyasinda ayni sonucu urettigi kanitlanmisti;
+bu sefer PANEL'IN KENDISI de ham export'lardan sifirdan yeniden kuruldu ve
+hala ayni sonuc cikti. climate_indices referans karsilastirmasi da tekrar
+0.00e+00 farkla gecti. 9/10 leakage testi degismedi.
+
+**(3) Veri sozlugu guncellendi.** `docs/data_dictionary.md` T1/T4 durumunda
+donmustu ("Status: T1 complete"), SPI/duyarlilik sutunlarini (T5),
+`baselines_monthly.parquet`'i (T6) ve `predictions.parquet`'i (T7) HIC
+belgelemi yordu - dosyanin kendi kurali ("belgelemedigin sutun yok
+sayilir") ihlal ediliyordu. Uc yeni bolum eklendi: §3.1-3.2 (SPI +
+duyarlilik), §4 (baselines_monthly.parquet - tum kolonlar + persistence
+kalibrasyonunun 4 ozel notu), §5 (predictions.parquet - issue-vs-
+verification tarih farki, actual/actual_raw_spi ayrimi).
+
+acik varsayim: `make` bu makinada kurulu degil - kullaniciya soruldu/
+bildirildi, kurulum onun kararina birakildi (choco/scoop/WSL secenekleri).
+
+sonraki: veri sozlugundeki §1-2'nin (grid, CHIRPS, ERA5) hala T1-T3
+doneminden guncel oldugu dogrulandi, degisiklik gerekmedi. CDS token
+gelince C3S ingestion + Faz 1'in geri kalani (integrity/missing-data audit
+resmilestirme) ele alinacak.

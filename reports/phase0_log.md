@@ -809,6 +809,49 @@ bulgulari kucuk/dogrulanabilir nitelikte) ve /phase-gate karari.
 
 ---
 
+## FAZ 0 KAPI KONTROLU - PROJECT_SPEC.md SS6
+
+/phase-gate calistirildi. Sonuc: GECTI.
+
+Kriter 1 - check_data_access.py calistirildi: GECTI (reports/data_access.json).
+Kriter 2 - havza icin bir degisken seti cekildi: GECTI (CHIRPS + ERA5-Land,
+  panel_monthly.parquet).
+Kriter 3 - SPI-3 hesaplandi: GECTI (SPI-1 de dahil, spi.py, climate_indices
+  referansina karsi 0.00e+00 fark).
+Kriter 4 - XGBoost Tier1(+1)/Tier2(+3) 4 baseline'la egitildi: GECTI
+  (baselines_monthly.parquet, predictions.parquet).
+Kriter 5 - skill tablosu uretildi: GECTI (reports/skill_table.md).
+
+ANA KAPI ("skill tablosu tum baseline'larla karsilastirma yapiyor VE leakage
+audit geciyor"): GECTI.
+  - pytest tests/test_leakage.py: 9 gecti, 1 atlandi (permutation kontrolu,
+    Faz 3'e planli erteleme, sessiz degil).
+  - iki bagimsiz skeptic denetimi (tam kapsam + dar kapsam) yapildi, TUM
+    bulgular cozuldu, acik bulgu kalmadi.
+  - temiz git HEAD'den (sonradan panelin KENDISI ham export'lardan sifirdan
+    yeniden kurularak da) T6->T7->T8 yeniden calistirildi, skill_table.md
+    BYTE-BYTE OZDES cikti - "metrikler temiz bir kosudan uretiliyor" sarti
+    iddia degil KANIT.
+
+Kosullu madde ("Tier 2 climatology'yi gecemezse Tier 1 + izleme + durust
+mevsimsel-sinir ifadesine daralt"): TETIKLENDI (spi_3@+3 climatology'yi
+gecmiyor, BSS -0.053, 3 testte de anlamsiz). Spec'in kendisi bunu Problem 2'de
+onceden kaydetmisti (cozum: C3S entegrasyonu, henuz yapilmadi - CDS token
+bekleniyor). README.md zaten "No skill claims yet" diyor, sisirilmis sayi yok -
+reframe zaten gerceklesmis durumda.
+
+GOMULMEMESI GEREKEN IKI ACIK MADDE (kapi gecti ama Faz 1 oncesi karar bekliyor):
+  1. SS7 bosluğu: Tier 1 (spi_1@+1) de climatology'yi net gecemiyor (skill
+     -0.048, ucteste de anlamsiz) - spec'in "Tier 2 basarisiz olursa Tier 1'e
+     daral" kacis yolu, Tier 1'in KENDISI de belirsizken elde bosluk kaliyor.
+     Hangi testin/esigin "basari" sayilacagi Doga'nin karari, kod isi degil.
+  2. Sizinti kaniti saklaniyor: reports/metrics_20260911T153546Z.json (AUC=1.0
+     kosusu) bilerek silinmedi, gecersiz-ama-kanit diye isaretli.
+
+Sonuc: Faz 1'e gecildi (kullanici onayi ile), CDS-bagimsiz kisimdan baslandi.
+
+---
+
 ## Faz 1 baslangici - CDS-bagimsiz kisim
 
 Faz 0 kapisi gecti (bkz. yukaridaki gate raporu). Kullanicinin secimiyle CDS
